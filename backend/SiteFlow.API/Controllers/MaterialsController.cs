@@ -1,13 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
 using SiteFlow.API.Data;
 using SiteFlow.API.DTOs.Materials;
 using SiteFlow.API.Models;
+using SiteFlow.API.Security;
 
 namespace SiteFlow.API.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/materials")]
 public class MaterialsController : ControllerBase
 {
@@ -50,6 +53,8 @@ public class MaterialsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(
+        Roles = AppRoles.Administrator + "," + AppRoles.ProcurementOfficer)]
     public async Task<ActionResult<Material>> CreateMaterial(
         CreateMaterialRequest request,
         CancellationToken cancellationToken)
@@ -105,10 +110,7 @@ public class MaterialsController : ControllerBase
             await _context.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException ex)
-            when (ex.InnerException is MySqlException
-            {
-                Number: 1062
-            })
+            when (ex.InnerException is MySqlException { Number: 1062 })
         {
             return Conflict(new
             {

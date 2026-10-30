@@ -1,13 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
 using SiteFlow.API.Data;
 using SiteFlow.API.DTOs.Suppliers;
 using SiteFlow.API.Models;
+using SiteFlow.API.Security;
 
 namespace SiteFlow.API.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/suppliers")]
 public class SuppliersController : ControllerBase
 {
@@ -50,6 +53,8 @@ public class SuppliersController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(
+        Roles = AppRoles.Administrator + "," + AppRoles.ProcurementOfficer)]
     public async Task<ActionResult<Supplier>> CreateSupplier(
         CreateSupplierRequest request,
         CancellationToken cancellationToken)
@@ -103,10 +108,7 @@ public class SuppliersController : ControllerBase
             await _context.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException ex)
-            when (ex.InnerException is MySqlException
-            {
-                Number: 1062
-            })
+            when (ex.InnerException is MySqlException { Number: 1062 })
         {
             return Conflict(new
             {

@@ -1,12 +1,15 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SiteFlow.API.Data;
 using SiteFlow.API.DTOs.MaterialRequests;
 using SiteFlow.API.Models;
+using SiteFlow.API.Security;
 
 namespace SiteFlow.API.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/material-requests")]
 public class MaterialRequestsController : ControllerBase
 {
@@ -42,7 +45,9 @@ public class MaterialRequestsController : ControllerBase
             .Include(r => r.Project)
             .Include(r => r.Lines)
                 .ThenInclude(l => l.Material)
-            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(
+                r => r.Id == id,
+                cancellationToken);
 
         if (request is null)
         {
@@ -56,6 +61,8 @@ public class MaterialRequestsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(
+        Roles = AppRoles.Administrator + "," + AppRoles.SiteEngineer)]
     public async Task<ActionResult<MaterialRequestResponse>> Create(
         CreateMaterialRequestDto dto,
         CancellationToken cancellationToken)
@@ -145,7 +152,7 @@ public class MaterialRequestsController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "One or more selected materials do not exist."
+                message = "One or more materials do not exist."
             });
         }
 
@@ -176,7 +183,6 @@ public class MaterialRequestsController : ControllerBase
 
         _context.MaterialRequests.Add(request);
 
-        // One SaveChanges call saves the header and lines together.
         await _context.SaveChangesAsync(cancellationToken);
 
         return CreatedAtAction(

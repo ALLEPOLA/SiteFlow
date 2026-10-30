@@ -1,13 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
 using SiteFlow.API.Data;
 using SiteFlow.API.DTOs.Projects;
 using SiteFlow.API.Models;
+using SiteFlow.API.Security;
 
 namespace SiteFlow.API.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/projects")]
 public class ProjectsController : ControllerBase
 {
@@ -50,11 +53,40 @@ public class ProjectsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = AppRoles.Administrator)]
     public async Task<ActionResult<Project>> CreateProject(
         CreateProjectRequest request,
         CancellationToken cancellationToken)
     {
         var code = request.Code.Trim().ToUpperInvariant();
+        var name = request.Name.Trim();
+        var location = request.Location.Trim();
+
+        if (string.IsNullOrWhiteSpace(code) ||
+            string.IsNullOrWhiteSpace(name) ||
+            string.IsNullOrWhiteSpace(location))
+        {
+            return BadRequest(new
+            {
+                message = "Project code, name, and location are required."
+            });
+        }
+
+        if (code.Length > 30)
+        {
+            return BadRequest(new
+            {
+                message = "Project code must not exceed 30 characters."
+            });
+        }
+
+        if (decimal.Round(request.Budget, 2) != request.Budget)
+        {
+            return BadRequest(new
+            {
+                message = "Budget can have at most 2 decimal places."
+            });
+        }
 
         var codeExists = await _context.Projects
             .AnyAsync(p => p.Code == code, cancellationToken);
@@ -70,8 +102,8 @@ public class ProjectsController : ControllerBase
         var project = new Project
         {
             Code = code,
-            Name = request.Name.Trim(),
-            Location = request.Location.Trim(),
+            Name = name,
+            Location = location,
             Budget = request.Budget,
             Status = "Active"
         };
@@ -83,10 +115,7 @@ public class ProjectsController : ControllerBase
             await _context.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException ex)
-            when (ex.InnerException is MySqlException
-            {
-                Number: 1062
-            })
+            when (ex.InnerException is MySqlException { Number: 1062 })
         {
             return Conflict(new
             {
