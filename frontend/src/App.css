@@ -236,3 +236,98 @@ select:focus-visible {
 select:disabled {
   background: #f1f5f9;
 }
+textarea {
+  width: 100%;
+  padding: 11px 12px;
+  color: #0f172a;
+  background: white;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+textarea:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+textarea:disabled {
+  background: #f1f5f9;
+}
+.request-line {
+  margin-bottom: 16px;
+  padding: 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.request-line h4 {
+  margin: 0 0 16px;
+}
+
+.secondary-button {
+  padding: 8px 14px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.secondary-button:hover {
+  background: #e2e8f0;
+}
+
+.secondary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.line-total {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.line-total span {
+  color: #475569;
+  font-size: 14px;
+}
+
+.request-total {
+  margin: 24px 0;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.section-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.section-toolbar h2 {
+  margin: 0;
+}
+
+.request-reason {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .request-line {
+    padding: 14px;
+  }
+
+  .request-total {
+    font-size: 18px;
+    text-align: left;
+  }
+}

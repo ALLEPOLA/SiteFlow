@@ -14,10 +14,19 @@ public class AppDbContext : DbContext
 
     public DbSet<Material> Materials => Set<Material>();
 
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+
+    public DbSet<MaterialRequest> MaterialRequests =>
+        Set<MaterialRequest>();
+
+    public DbSet<MaterialRequestLine> MaterialRequestLines =>
+        Set<MaterialRequestLine>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
+        // Projects
         modelBuilder.Entity<Project>(entity =>
         {
             entity.HasKey(p => p.Id);
@@ -45,6 +54,7 @@ public class AppDbContext : DbContext
                 .IsRequired();
         });
 
+        // Materials
         modelBuilder.Entity<Material>(entity =>
         {
             entity.HasKey(m => m.Id);
@@ -70,6 +80,109 @@ public class AppDbContext : DbContext
 
             entity.Property(m => m.IsActive)
                 .IsRequired();
+        });
+
+        // Suppliers
+        modelBuilder.Entity<Supplier>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+
+            entity.Property(s => s.Code)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.HasIndex(s => s.Code)
+                .IsUnique();
+
+            entity.Property(s => s.Name)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(s => s.ContactPerson)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(s => s.Phone)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(s => s.Email)
+                .HasMaxLength(254)
+                .IsRequired();
+
+            entity.Property(s => s.Address)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(s => s.IsActive)
+                .IsRequired();
+        });
+
+        // Material request headers
+        modelBuilder.Entity<MaterialRequest>(entity =>
+        {
+            entity.HasKey(r => r.Id);
+
+            entity.Property(r => r.RequiredDate)
+                .HasColumnType("date")
+                .IsRequired();
+
+            entity.Property(r => r.Reason)
+                .HasMaxLength(1000)
+                .IsRequired();
+
+            entity.Property(r => r.Status)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(r => r.CreatedAtUtc)
+                .HasColumnType("datetime(6)")
+                .IsRequired();
+
+            entity.HasOne(r => r.Project)
+                .WithMany()
+                .HasForeignKey(r => r.ProjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasMany(r => r.Lines)
+                .WithOne(l => l.MaterialRequest)
+                .HasForeignKey(l => l.MaterialRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Material request lines
+        modelBuilder.Entity<MaterialRequestLine>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+
+            entity.Property(l => l.Quantity)
+                .HasPrecision(18, 3);
+
+            entity.Property(l => l.EstimatedUnitPrice)
+                .HasPrecision(18, 2);
+
+            entity.HasOne(l => l.Material)
+                .WithMany()
+                .HasForeignKey(l => l.MaterialId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(l => new
+            {
+                l.MaterialRequestId,
+                l.MaterialId
+            })
+            .IsUnique();
+
+            entity.ToTable("MaterialRequestLines", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_MaterialRequestLines_Quantity",
+                    "`Quantity` > 0");
+
+                table.HasCheckConstraint(
+                    "CK_MaterialRequestLines_EstimatedUnitPrice",
+                    "`EstimatedUnitPrice` >= 0");
+            });
         });
     }
 }

@@ -1,36 +1,48 @@
 import { useState } from 'react'
 import ProjectsPage from './components/ProjectsPage'
 import MaterialsPage from './components/MaterialsPage'
+import SuppliersPage from './components/SuppliersPage'
+import MaterialRequestsPage from './components/MaterialRequestsPage'
 import './App.css'
 
+type Page = 'projects' | 'materials' | 'suppliers' | 'requests'
+
+const navigation: { page: Page; label: string }[] = [
+  { page: 'projects', label: 'Projects' },
+  { page: 'materials', label: 'Materials' },
+  { page: 'suppliers', label: 'Suppliers' },
+  { page: 'requests', label: 'Material Requests' },
+]
+
 function App() {
-  const [page, setPage] = useState<'projects' | 'materials'>('projects')
+  const [page, setPage] = useState<Page>('projects')
 
   return (
     <main className="app">
       <p className="brand">SiteFlow ERP</p>
 
       <nav className="page-navigation" aria-label="Main navigation">
-        <button
-          type="button"
-          className={page === 'projects' ? 'nav-button active' : 'nav-button'}
-          aria-current={page === 'projects' ? 'page' : undefined}
-          onClick={() => setPage('projects')}
-        >
-          Projects
-        </button>
-
-        <button
-          type="button"
-          className={page === 'materials' ? 'nav-button active' : 'nav-button'}
-          aria-current={page === 'materials' ? 'page' : undefined}
-          onClick={() => setPage('materials')}
-        >
-          Materials
-        </button>
+        {navigation.map((item) => (
+          <button
+            key={item.page}
+            type="button"
+            className={
+              page === item.page
+                ? 'nav-button active'
+                : 'nav-button'
+            }
+            aria-current={page === item.page ? 'page' : undefined}
+            onClick={() => setPage(item.page)}
+          >
+            {item.label}
+          </button>
+        ))}
       </nav>
 
-      {page === 'projects' ? <ProjectsPage /> : <MaterialsPage />}
+      {page === 'projects' && <ProjectsPage />}
+      {page === 'materials' && <MaterialsPage />}
+      {page === 'suppliers' && <SuppliersPage />}
+      {page === 'requests' && <MaterialRequestsPage />}
     </main>
   )
 }
