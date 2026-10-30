@@ -1,0 +1,23 @@
+# Frontend dependencies and builds
+node_modules/
+dist/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Backend generated files
+**/bin/
+**/obj/
+**/appsettings.Development.json
+
+# Local editor files
+.vs/
+.vscode/
+
+# Logs and operating system files
+*.log
+.DS_Store
+Thumbs.db

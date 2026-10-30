@@ -1,0 +1,6 @@
+@SiteFlow.API_HostAddress = http://localhost:5058
+
+GET {{SiteFlow.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
