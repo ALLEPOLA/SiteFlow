@@ -690,7 +690,7 @@ export default function PurchaseOrdersPage() {
                       {money.format(order.totalAmount)}
                     </td>
                     <td>
-                      <span className="status-badge">
+                      <span className="status-badge" data-status={order.status}>
                         {order.status}
                       </span>
                     </td>

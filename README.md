@@ -44,3 +44,6 @@ PDF/Excel reports, supplier invoices and payments, attachments, and notification
 
 See [ERP operations and setup](docs/ERP_OPERATIONS.md) for access rules,
 migration instructions, workflow limits, and verification commands.
+
+See [interface design](docs/UI_DESIGN.md) for the Tailwind setup, responsive layout,
+and motion/accessibility conventions.

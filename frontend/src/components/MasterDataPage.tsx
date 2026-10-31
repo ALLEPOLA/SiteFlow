@@ -292,7 +292,7 @@ export default function MasterDataPage({
                         key={column.key}
                         className={column.format === 'money' ? 'number-cell' : ''}
                       >
-                        {displayValue(row, column)}
+                        {column.key === 'status' ? <span className="status-badge" data-status={String(row[column.key])}>{displayValue(row, column)}</span> : displayValue(row, column)}
                       </td>
                     ))}
                   </tr>

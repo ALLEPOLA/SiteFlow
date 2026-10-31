@@ -448,7 +448,7 @@ export default function InventoryPage() {
                       </td>
 
                       <td>
-                        <span className="status-badge">
+                        <span className="status-badge" data-status={movement.movementType}>
                           {movement.movementType}
                         </span>
                       </td>

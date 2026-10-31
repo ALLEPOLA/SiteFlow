@@ -19,6 +19,8 @@ import DocumentsPage from './components/erp/DocumentsPage'
 import NotificationsPage from './components/erp/NotificationsPage'
 import ReportsPage from './components/erp/ReportsPage'
 import AuditPage from './components/erp/AuditPage'
+import Icon from './components/ui/Icon'
+import Brand from './components/ui/Brand'
 import type { AuthUser } from './types/auth'
 import { apiFetch, readApiResponse } from './api/apiFetch'
 import './App.css'
@@ -78,6 +80,38 @@ function App() {
   const [loginNotice, setLoginNotice] = useState('')
   const [page, setPage] = useState<Page>('dashboard')
   const [loggingOut, setLoggingOut] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const sidebar = document.getElementById('workspace-sidebar')
+    const previousFocus = document.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')
+    const previousOverflow = document.body.style.overflow
+    const mobile = window.matchMedia('(max-width: 1023px)')
+    if (mobile.matches) {
+      document.body.style.overflow = 'hidden'
+      sidebar?.querySelector<HTMLButtonElement>('button')?.focus()
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMenuOpen(false)
+      if (event.key !== 'Tab' || !mobile.matches) return
+      const buttons = sidebar?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')
+      if (!buttons?.length) return
+      const first = buttons[0]
+      const last = buttons[buttons.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    function closeOnDesktop() { if (!mobile.matches) setMenuOpen(false) }
+    window.addEventListener('keydown', closeOnEscape)
+    mobile.addEventListener('change', closeOnDesktop)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      mobile.removeEventListener('change', closeOnDesktop)
+      document.body.style.overflow = previousOverflow
+      previousFocus?.focus()
+    }
+  }, [menuOpen])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -152,8 +186,9 @@ function App() {
 
   if (checkingSession) {
     return (
-      <main className="app">
-        <p role="status">Checking your session...</p>
+      <main className="app session-screen">
+        <Brand />
+        <div className="session-loader" role="status"><span className="loading-spinner" aria-hidden="true" />Checking your session...</div>
       </main>
     )
   }
@@ -161,7 +196,7 @@ function App() {
   if (!user) {
     if (sessionError) {
       return (
-        <main className="app">
+        <main className="app session-error">
           <p className="error-message" role="alert">
             {sessionError}
           </p>
@@ -203,28 +238,53 @@ function App() {
     item => (!item.adminOnly || isAdmin) && (!item.roles || item.roles.some(role => user.roles.includes(role))),
   )
 
-  return (
-    <main className="app">
-      <header className="app-toolbar">
-        <p className="brand">SiteFlow ERP</p>
+  const groups = [
+    { label: 'Workspace', pages: ['dashboard', 'projects', 'costs'] },
+    { label: 'Materials & purchasing', pages: ['materials', 'suppliers', 'requests', 'orders', 'receipts'] },
+    { label: 'Stock & finance', pages: ['inventory', 'issues', 'stock-operations', 'accounts', 'corrections'] },
+    { label: 'Tools & administration', pages: ['documents', 'notifications', 'reports', 'audit', 'users', 'profile'] },
+  ]
+  const currentLabel = user.mustChangePassword ? 'My Profile' : navigation.find(item => item.page === page)?.label
+  const initials = user.fullName.split(' ').filter(Boolean).slice(0, 2).map(word => word[0]).join('')
 
+  return (
+    <div className="app app-shell">
+      <a href="#workspace-content" className="skip-link">Skip to content</a>
+      {menuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
+      <aside id="workspace-sidebar" className={`app-sidebar ${menuOpen ? 'is-open' : ''}`}>
+        <div className="sidebar-brand"><Brand /><button type="button" className="icon-button mobile-menu-button" aria-label="Close navigation" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div>
+        {!user.mustChangePassword && <nav className="page-navigation" aria-label="Main navigation">
+          {groups.map(group => {
+            const items = visibleNavigation.filter(item => group.pages.includes(item.page))
+            return items.length > 0 && <div className="nav-group" key={group.label}><p className="nav-group-label">{group.label}</p>{items.map(item => <button key={item.page} type="button" className={`nav-button ${page === item.page ? 'active' : ''}`} aria-current={page === item.page ? 'page' : undefined} onClick={() => { setPage(item.page); setMenuOpen(false) }}><Icon name={item.page} /><span>{item.label}</span>{page === item.page && <span className="nav-active-dot" />}</button>)}</div>
+          })}
+        </nav>}
+        <div className="sidebar-footer"><span className="workspace-emblem"><Icon name="projects" /></span><div><strong>Construction ERP</strong><span>Your materials, connected.</span></div></div>
+      </aside>
+      <div className="workspace-main" inert={menuOpen ? true : undefined}>
+      <header className="app-toolbar">
+        <div className="flex min-w-0 items-center gap-3"><button type="button" className="icon-button mobile-menu-button" aria-label="Open navigation" aria-expanded={menuOpen} aria-controls="workspace-sidebar" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><div className="toolbar-breadcrumb"><span>Workspace</span><span aria-hidden="true">/</span><strong>{currentLabel}</strong></div></div>
         <div className="user-menu">
-          <div>
+          {!user.mustChangePassword && <button type="button" className="icon-button notification-shortcut" title="Notifications" aria-label="Open notifications" onClick={() => setPage('notifications')}><Icon name="notifications" /></button>}
+          <span className="user-avatar" aria-hidden="true">{initials}</span>
+          <div className="user-details">
             <strong>{user.fullName}</strong>
-            <p className="user-role">{user.roles.join(', ')}</p>
+            <p className="user-role">{user.roles.map(role => role.replace(/([a-z])([A-Z])/g, '$1 $2')).join(', ')}</p>
           </div>
 
           <button
             type="button"
-            className="secondary-button"
+            className="icon-button logout-button"
+            title="Sign out"
+            aria-label={loggingOut ? 'Signing out' : 'Sign out'}
             disabled={loggingOut}
             onClick={handleLogout}
           >
-            {loggingOut ? 'Signing out...' : 'Logout'}
+            <Icon name="logout" />
           </button>
         </div>
       </header>
-
+      <main id="workspace-content" className="workspace-content" tabIndex={-1}>
       {sessionError && (
         <p className="error-message" role="alert">
           {sessionError}
@@ -239,29 +299,7 @@ function App() {
         />
       ) : (
         <>
-          <nav
-            className="page-navigation"
-            aria-label="Main navigation"
-          >
-            {visibleNavigation.map(item => (
-              <button
-                key={item.page}
-                type="button"
-                className={
-                  page === item.page
-                    ? 'nav-button active'
-                    : 'nav-button'
-                }
-                aria-current={
-                  page === item.page ? 'page' : undefined
-                }
-                onClick={() => setPage(item.page)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
+          <div key={page} className="page-transition">
           {page === 'dashboard' && (
             <DashboardPage
               onNavigate={destination => setPage(destination)}
@@ -296,9 +334,13 @@ function App() {
               onSignedOut={endSession}
             />
           )}
+          </div>
         </>
       )}
-    </main>
+      <footer className="workspace-footer"><span>SiteFlow <span aria-hidden="true">/</span> Materials management</span><span>Built for better site operations</span></footer>
+      </main>
+      </div>
+    </div>
   )
 }
 

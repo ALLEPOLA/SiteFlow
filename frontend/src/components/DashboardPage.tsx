@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
+import Icon from './ui/Icon'
 
 type DashboardDestination =
   | 'projects'
@@ -116,10 +117,16 @@ export default function DashboardPage({ onNavigate }: Props) {
 
   return (
     <>
-      <header className="page-header">
-        <h1>Dashboard</h1>
+      <header className="page-header dashboard-heading">
+        <p className="eyebrow">OPERATIONS OVERVIEW</p>
+        <h1>Your operations, at a glance<span className="text-teal-600">.</span></h1>
         <p>Construction and materials activity for your accessible projects.</p>
       </header>
+
+      <section className="dashboard-hero">
+        <div className="relative z-10"><span className="hero-label"><span />CONNECTED MATERIALS MANAGEMENT</span><h2>Keep every site<br /><span>moving forward.</span></h2><p>From the first request to the final issue.<br className="hidden sm:block" /> Everything you need to keep materials flowing.</p><button type="button" className="hero-action" onClick={() => onNavigate('inventory')}>Explore your inventory<Icon name="arrow" /></button></div>
+        <div className="hero-flow" aria-label="Materials workflow"><div><span className="hero-flow-icon"><Icon name="requests" /></span><span>01</span><strong>Request</strong></div><i /><div><span className="hero-flow-icon"><Icon name="orders" /></span><span>02</span><strong>Purchase</strong></div><i /><div><span className="hero-flow-icon"><Icon name="inventory" /></span><span>03</span><strong>Receive & track</strong></div></div>
+      </section>
 
       <div className="section-toolbar dashboard-toolbar">
         <p>
@@ -136,7 +143,7 @@ export default function DashboardPage({ onNavigate }: Props) {
           disabled={loading}
           onClick={() => setRefreshKey(current => current + 1)}
         >
-          {loading ? 'Refreshing...' : 'Refresh'}
+          <Icon name="refresh" className={loading ? 'is-spinning' : ''} />{loading ? 'Refreshing...' : 'Refresh overview'}
         </button>
       </div>
 
@@ -147,7 +154,7 @@ export default function DashboardPage({ onNavigate }: Props) {
       )}
 
       {loading ? (
-        <p role="status">Loading summary and recent activity...</p>
+        <div role="status" aria-label="Loading summary and recent activity"><div className="dashboard-cards skeleton-grid" aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <div className="skeleton-card" key={index}><span /><strong /><small /></div>)}</div><span className="sr-only">Loading summary and recent activity...</span></div>
       ) : !error && data ? (
         <>
           <div className="dashboard-cards">
@@ -296,7 +303,7 @@ export default function DashboardPage({ onNavigate }: Props) {
                         <td>{order.supplierName}</td>
                         <td>{order.expectedDeliveryDate}</td>
                         <td>
-                          <span className="status-badge">
+                          <span className="status-badge" data-status={order.status}>
                             {order.status === 'PartiallyReceived'
                               ? 'Partially received'
                               : order.status}
