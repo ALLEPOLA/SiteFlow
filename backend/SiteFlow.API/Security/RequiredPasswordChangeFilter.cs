@@ -25,6 +25,13 @@ public class RequiredPasswordChangeFilter : IAsyncActionFilter
             return;
         }
 
+        var account = await _users.GetUserAsync(context.HttpContext.User);
+        if (account is null || !account.IsActive)
+        {
+            context.Result = new UnauthorizedResult();
+            return;
+        }
+
         var allowed = context.HttpContext.GetEndpoint()?
             .Metadata
             .GetMetadata<AllowPasswordChangeRequiredAttribute>();

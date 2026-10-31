@@ -158,6 +158,8 @@ public class InventoryController : ControllerBase
                     : m.GoodsReceiptLine.GoodsReceiptId,
 
                 m.MaterialIssueLineId,
+                m.InventoryOperationId,
+                m.ReversesMovementId,
 
                 MaterialIssueId = m.MaterialIssueLine == null
                     ? (int?)null

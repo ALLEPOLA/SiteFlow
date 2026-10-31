@@ -118,7 +118,7 @@ export default function DashboardPage({ onNavigate }: Props) {
     <>
       <header className="page-header">
         <h1>Dashboard</h1>
-        <p>Company-wide construction and materials activity.</p>
+        <p>Construction and materials activity for your accessible projects.</p>
       </header>
 
       <div className="section-toolbar dashboard-toolbar">

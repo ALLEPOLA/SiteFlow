@@ -456,6 +456,10 @@ public class PurchaseOrdersController : ControllerBase
         var issuedAt = DateTime.UtcNow;
 
         var affectedRows = await _context.PurchaseOrders
+            // The order above was loaded through project access filters. Reapplying
+            // those filters to child lines makes MySQL update its own target via a
+            // subquery (error 1093). Keep this update limited to that authorized ID.
+            .IgnoreQueryFilters()
             .Where(p =>
                 p.Id == id &&
                 p.Status == "Draft" &&

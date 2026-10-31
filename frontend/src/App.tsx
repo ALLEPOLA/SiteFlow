@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import DashboardPage from './components/DashboardPage'
 import ProjectsPage from './components/ProjectsPage'
+import ProjectCostsPage from './components/ProjectCostsPage'
 import MaterialsPage from './components/MaterialsPage'
 import SuppliersPage from './components/SuppliersPage'
 import MaterialRequestsPage from './components/MaterialRequestsPage'
@@ -11,6 +12,13 @@ import MaterialIssuesPage from './components/MaterialIssuesPage'
 import UserManagementPage from './components/UserManagementPage'
 import ProfilePage from './components/ProfilePage'
 import LoginPage from './components/LoginPage'
+import CorrectionsPage from './components/erp/CorrectionsPage'
+import StockOperationsPage from './components/erp/StockOperationsPage'
+import SupplierAccountsPage from './components/erp/SupplierAccountsPage'
+import DocumentsPage from './components/erp/DocumentsPage'
+import NotificationsPage from './components/erp/NotificationsPage'
+import ReportsPage from './components/erp/ReportsPage'
+import AuditPage from './components/erp/AuditPage'
 import type { AuthUser } from './types/auth'
 import { apiFetch, readApiResponse } from './api/apiFetch'
 import './App.css'
@@ -18,6 +26,7 @@ import './App.css'
 type Page =
   | 'dashboard'
   | 'projects'
+  | 'costs'
   | 'materials'
   | 'suppliers'
   | 'requests'
@@ -27,14 +36,23 @@ type Page =
   | 'issues'
   | 'users'
   | 'profile'
+  | 'corrections'
+  | 'stock-operations'
+  | 'accounts'
+  | 'documents'
+  | 'notifications'
+  | 'reports'
+  | 'audit'
 
 const navigation: {
   page: Page
   label: string
   adminOnly?: boolean
+  roles?: string[]
 }[] = [
   { page: 'dashboard', label: 'Dashboard' },
   { page: 'projects', label: 'Projects' },
+  { page: 'costs', label: 'Project Costs' },
   { page: 'materials', label: 'Materials' },
   { page: 'suppliers', label: 'Suppliers' },
   { page: 'requests', label: 'Material Requests' },
@@ -42,6 +60,13 @@ const navigation: {
   { page: 'receipts', label: 'Goods Receipts' },
   { page: 'inventory', label: 'Inventory' },
   { page: 'issues', label: 'Material Issues' },
+  { page: 'corrections', label: 'Corrections' },
+  { page: 'stock-operations', label: 'Stock Operations', roles: ['Administrator', 'Storekeeper'] },
+  { page: 'accounts', label: 'Supplier Accounts', roles: ['Administrator', 'ProcurementOfficer'] },
+  { page: 'documents', label: 'Documents' },
+  { page: 'notifications', label: 'Notifications' },
+  { page: 'reports', label: 'Reports & Exports' },
+  { page: 'audit', label: 'Audit History', adminOnly: true },
   { page: 'users', label: 'User Management', adminOnly: true },
   { page: 'profile', label: 'My Profile' },
 ]
@@ -175,7 +200,7 @@ function App() {
   const isAdmin = user.roles.includes('Administrator')
 
   const visibleNavigation = navigation.filter(
-    item => !item.adminOnly || isAdmin,
+    item => (!item.adminOnly || isAdmin) && (!item.roles || item.roles.some(role => user.roles.includes(role))),
   )
 
   return (
@@ -244,6 +269,7 @@ function App() {
           )}
 
           {page === 'projects' && <ProjectsPage />}
+          {page === 'costs' && <ProjectCostsPage />}
           {page === 'materials' && <MaterialsPage />}
           {page === 'suppliers' && <SuppliersPage />}
           {page === 'requests' && <MaterialRequestsPage />}
@@ -251,6 +277,16 @@ function App() {
           {page === 'receipts' && <GoodsReceiptsPage />}
           {page === 'inventory' && <InventoryPage />}
           {page === 'issues' && <MaterialIssuesPage />}
+          {page === 'corrections' && <CorrectionsPage user={user} />}
+          {page === 'stock-operations' && user.roles.some(role => ['Administrator', 'Storekeeper'].includes(role)) && <StockOperationsPage />}
+          {page === 'accounts' && user.roles.some(role => ['Administrator', 'ProcurementOfficer'].includes(role)) && <SupplierAccountsPage />}
+          {page === 'documents' && <DocumentsPage user={user} />}
+          {page === 'notifications' && <NotificationsPage user={user} onNavigate={destination => {
+            const item = visibleNavigation.find(entry => entry.page === destination)
+            if (item) setPage(item.page)
+          }} />}
+          {page === 'reports' && <ReportsPage />}
+          {page === 'audit' && isAdmin && <AuditPage />}
           {page === 'users' && isAdmin && <UserManagementPage />}
 
           {page === 'profile' && (

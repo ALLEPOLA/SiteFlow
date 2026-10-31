@@ -2,15 +2,30 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SiteFlow.API.Data.Configurations;
 using SiteFlow.API.Models;
+using System.Security.Claims;
 
 namespace SiteFlow.API.Data;
 
 public class AppDbContext : IdentityDbContext<ApplicationUser>
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options)
+    private readonly IHttpContextAccessor? _http;
+    public string CurrentUserId => _http?.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+    public bool Unrestricted => _http?.HttpContext is null || _http.HttpContext.User.IsInRole("Administrator");
+
+    public AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? http = null)
         : base(options)
     {
+        _http = http;
     }
+
+    public DbSet<ProjectAssignment> ProjectAssignments => Set<ProjectAssignment>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<InventoryOperation> InventoryOperations => Set<InventoryOperation>();
+    public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
+    public DbSet<SupplierInvoiceLine> SupplierInvoiceLines => Set<SupplierInvoiceLine>();
+    public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
+    public DbSet<DocumentAttachment> DocumentAttachments => Set<DocumentAttachment>();
+    public DbSet<NotificationRead> NotificationReads => Set<NotificationRead>();
 
     public DbSet<Project> Projects => Set<Project>();
 
@@ -48,6 +63,24 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        ErpConfiguration.Configure(modelBuilder);
+        modelBuilder.Entity<ProjectAssignment>().HasQueryFilter(a => Unrestricted || a.UserId == CurrentUserId);
+
+        modelBuilder.Entity<Project>().HasQueryFilter(p => Unrestricted || ProjectAssignments.Any(a => a.ProjectId == p.Id && a.UserId == CurrentUserId));
+        modelBuilder.Entity<MaterialRequest>().HasQueryFilter(r => Projects.Any(p => p.Id == r.ProjectId));
+        modelBuilder.Entity<MaterialRequestLine>().HasQueryFilter(l => MaterialRequests.Any(r => r.Id == l.MaterialRequestId));
+        modelBuilder.Entity<PurchaseOrder>().HasQueryFilter(o => MaterialRequests.Any(r => r.Id == o.MaterialRequestId));
+        modelBuilder.Entity<PurchaseOrderLine>().HasQueryFilter(l => PurchaseOrders.Any(o => o.Id == l.PurchaseOrderId));
+        modelBuilder.Entity<GoodsReceipt>().HasQueryFilter(r => PurchaseOrders.Any(o => o.Id == r.PurchaseOrderId));
+        modelBuilder.Entity<GoodsReceiptLine>().HasQueryFilter(l => GoodsReceipts.Any(r => r.Id == l.GoodsReceiptId));
+        modelBuilder.Entity<MaterialIssue>().HasQueryFilter(i => Projects.Any(p => p.Id == i.ProjectId));
+        modelBuilder.Entity<MaterialIssueLine>().HasQueryFilter(l => MaterialIssues.Any(i => i.Id == l.MaterialIssueId));
+        modelBuilder.Entity<StockMovement>().HasQueryFilter(m => Projects.Any(p => p.Id == m.ProjectId));
+        modelBuilder.Entity<InventoryOperation>().HasQueryFilter(o => Projects.Any(p => p.Id == o.ProjectId) || Projects.Any(p => p.Id == o.DestinationProjectId));
+        modelBuilder.Entity<SupplierInvoice>().HasQueryFilter(i => PurchaseOrders.Any(o => o.Id == i.PurchaseOrderId));
+        modelBuilder.Entity<SupplierInvoiceLine>().HasQueryFilter(l => SupplierInvoices.Any(i => i.Id == l.SupplierInvoiceId));
+        modelBuilder.Entity<SupplierPayment>().HasQueryFilter(p => SupplierInvoices.Any(i => i.Id == p.SupplierInvoiceId));
+        modelBuilder.Entity<DocumentAttachment>().HasQueryFilter(a => Projects.Any(p => p.Id == a.ProjectId));
 
         ConfigureUsers(modelBuilder);
         ConfigureProjects(modelBuilder);

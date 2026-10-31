@@ -13,4 +13,5 @@ public class Material
     public string Unit { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
+    public decimal ReorderLevel { get; set; }
 }

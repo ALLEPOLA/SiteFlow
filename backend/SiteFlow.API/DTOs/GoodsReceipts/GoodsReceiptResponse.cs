@@ -2,6 +2,7 @@ namespace SiteFlow.API.DTOs.GoodsReceipts;
 
 public class GoodsReceiptResponse
 {
+    public int ProjectId { get; set; }
     public int Id { get; set; }
 
     public string ReceiptNumber { get; set; } = string.Empty;
@@ -35,6 +36,7 @@ public class GoodsReceiptResponse
 
 public class GoodsReceiptLineResponse
 {
+    public int MaterialId { get; set; }
     public int Id { get; set; }
 
     public int PurchaseOrderLineId { get; set; }

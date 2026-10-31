@@ -2,6 +2,47 @@
   width: 100%;
 }
 
+.notification-list {
+  padding-left: 20px;
+}
+
+.notification-list li {
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+@media print {
+  .page-navigation, .app-toolbar, button { display: none; }
+  .app { max-width: none; padding: 0; }
+  .panel { box-shadow: none; break-inside: avoid; }
+}
+
+.cost-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.cost-summary .panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cost-summary strong {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.cost-over-budget {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.cost-over-budget small {
+  display: block;
+}
+
 .app {
   max-width: 1100px;
   margin: 0 auto;

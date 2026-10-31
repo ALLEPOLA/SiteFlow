@@ -85,6 +85,22 @@ public class StockMovementConfiguration
                 )
                 OR
                 (
+                    `MovementType` IN ('Adjustment', 'Count', 'TransferIn', 'TransferOut', 'SupplierReturn')
+                    AND `Quantity` <> 0
+                    AND `InventoryOperationId` IS NOT NULL
+                    AND `GoodsReceiptLineId` IS NULL
+                    AND `MaterialIssueLineId` IS NULL
+                )
+                OR
+                (
+                    `MovementType` = 'Reversal'
+                    AND `Quantity` <> 0
+                    AND `ReversesMovementId` IS NOT NULL
+                    AND `GoodsReceiptLineId` IS NULL
+                    AND `MaterialIssueLineId` IS NULL
+                )
+                OR
+                (
                     `MovementType` = 'Issue'
                     AND `Quantity` < 0
                     AND `GoodsReceiptLineId` IS NULL

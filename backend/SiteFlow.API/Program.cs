@@ -5,8 +5,12 @@ using Microsoft.EntityFrameworkCore;
 using SiteFlow.API.Data;
 using SiteFlow.API.Models;
 using SiteFlow.API.Security;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
+
+if (builder.Configuration["DataProtection:KeyPath"] is { Length: > 0 } keyPath)
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyPath));
 
 var connectionString =
     builder.Configuration.GetConnectionString("DefaultConnection")
@@ -88,6 +92,8 @@ builder.Services.AddAntiforgery(options =>
 });
 
 builder.Services.AddScoped<RequiredPasswordChangeFilter>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<OperationAuditFilter>();
 
 builder.Services.AddControllersWithViews(options =>
 {
@@ -95,6 +101,8 @@ builder.Services.AddControllersWithViews(options =>
         new AutoValidateAntiforgeryTokenAttribute());
 
     options.Filters.AddService<RequiredPasswordChangeFilter>();
+    options.Filters.AddService<OperationAuditFilter>();
+    options.Filters.Add<DatabaseConflictFilter>();
 });
 
 builder.Services.AddEndpointsApiExplorer();

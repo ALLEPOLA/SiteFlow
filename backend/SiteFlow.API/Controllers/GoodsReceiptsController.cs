@@ -292,6 +292,11 @@ public class GoodsReceiptsController : ControllerBase
             });
         }
 
+        var projectId = await _context.MaterialRequests.Where(r => r.Id == order.MaterialRequestId)
+            .Select(r => r.ProjectId).SingleAsync(cancellationToken);
+        if (!await OperationRules.LockProject(_context, projectId))
+            return BadRequest(new { message = "The project must be active and assigned to you." });
+
         // Recheck after waiting for the purchase order lock.
         existing = await ReceiptQuery()
             .FirstOrDefaultAsync(
@@ -324,6 +329,7 @@ public class GoodsReceiptsController : ControllerBase
 
         var orderLines = await _context.PurchaseOrderLines
             .AsNoTracking()
+            .Include(l => l.MaterialRequestLine)
             .Where(l => l.PurchaseOrderId == order.Id)
             .ToDictionaryAsync(
                 l => l.Id,
@@ -372,6 +378,14 @@ public class GoodsReceiptsController : ControllerBase
                 });
             }
         }
+
+        var materialIds = dto.Lines.Select(l => orderLines[l.PurchaseOrderLineId].MaterialRequestLine.MaterialId).ToList();
+        var latestDates = await _context.StockMovements
+            .Where(m => m.ProjectId == projectId && materialIds.Contains(m.MaterialId))
+            .GroupBy(m => m.MaterialId).Select(g => g.Max(m => m.MovementDate))
+            .ToListAsync(cancellationToken);
+        if (latestDates.Any(date => dto.ReceivedDate < date))
+            return BadRequest(new { message = "Received date cannot precede the latest stock movement for a delivered material." });
 
         var receipt = new GoodsReceipt
         {
@@ -507,6 +521,7 @@ public class GoodsReceiptsController : ControllerBase
 
                 return new GoodsReceiptLineResponse
                 {
+                    MaterialId = material.Id,
                     Id = line.Id,
                     PurchaseOrderLineId = line.PurchaseOrderLineId,
                     MaterialCode = material.Code,
@@ -525,6 +540,7 @@ public class GoodsReceiptsController : ControllerBase
 
         return new GoodsReceiptResponse
         {
+            ProjectId = receipt.PurchaseOrder.MaterialRequest.ProjectId,
             Id = receipt.Id,
             ReceiptNumber = $"GR-{receipt.Id:D6}",
             ClientRequestId = receipt.ClientRequestId,

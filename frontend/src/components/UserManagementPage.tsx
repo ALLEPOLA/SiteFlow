@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
+import StaffAdministration from './erp/StaffAdministration'
 
 type UserRole =
   | 'SiteEngineer'
@@ -144,6 +145,8 @@ export default function UserManagementPage() {
         <h1>User Management</h1>
         <p>Create staff accounts and assign their responsibilities.</p>
       </header>
+
+      <StaffAdministration key={createdUsers.length} />
 
       {error && (
         <p className="error-message" role="alert">

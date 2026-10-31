@@ -51,7 +51,7 @@ public class AuthController : ControllerBase
         var user = await _userManager.FindByEmailAsync(
             request.Email.Trim());
 
-        if (user is null)
+        if (user is null || !user.IsActive)
         {
             return Unauthorized(new
             {

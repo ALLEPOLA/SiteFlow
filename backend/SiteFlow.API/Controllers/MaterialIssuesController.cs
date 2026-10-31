@@ -269,15 +269,9 @@ public class MaterialIssuesController : ControllerBase
 
                 QuantityOnHand = group.Sum(m => m.Quantity),
 
-                ReceiptQuantity = group.Sum(m =>
-                    m.MovementType == "Receipt"
-                        ? m.Quantity
-                        : 0m),
+                ReceiptQuantity = group.Sum(m => m.Quantity),
 
-                ReceiptValue = group.Sum(m =>
-                    m.MovementType == "Receipt"
-                        ? m.Quantity * m.UnitCost
-                        : 0m),
+                ReceiptValue = group.Sum(m => m.Quantity * m.UnitCost),
 
                 LatestMovementDate = group.Max(m => m.MovementDate)
             })
@@ -346,7 +340,7 @@ public class MaterialIssuesController : ControllerBase
                 var available = stock[line.MaterialId];
 
                 var unitCost = decimal.Round(
-                    available.ReceiptValue / available.ReceiptQuantity,
+                    Math.Max(0, available.ReceiptValue / available.ReceiptQuantity),
                     2,
                     MidpointRounding.AwayFromZero);
 

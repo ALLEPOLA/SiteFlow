@@ -29,6 +29,8 @@ type StockMovement = {
   goodsReceiptId: number | null
   materialIssueLineId: number | null
   materialIssueId: number | null
+  inventoryOperationId: number | null
+  reversesMovementId: number | null
   createdByName: string
   createdAtUtc: string
 }
@@ -62,6 +64,8 @@ function getError(error: unknown) {
 }
 
 function getSourceReference(movement: StockMovement) {
+  if (movement.reversesMovementId != null) return `Reverses movement ${movement.reversesMovementId}`
+  if (movement.inventoryOperationId != null) return `ST-${movement.inventoryOperationId}`
   if (movement.goodsReceiptId != null) {
     return `GR-${String(movement.goodsReceiptId).padStart(6, '0')}`
   }
