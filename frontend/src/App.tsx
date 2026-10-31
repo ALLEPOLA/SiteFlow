@@ -5,6 +5,8 @@ import SuppliersPage from './components/SuppliersPage'
 import MaterialRequestsPage from './components/MaterialRequestsPage'
 import PurchaseOrdersPage from './components/PurchaseOrdersPage'
 import GoodsReceiptsPage from './components/GoodsReceiptsPage'
+import InventoryPage from './components/InventoryPage'
+import MaterialIssuesPage from './components/MaterialIssuesPage'
 import LoginPage from './components/LoginPage'
 import type { AuthUser } from './types/auth'
 import { apiFetch, readApiResponse } from './api/apiFetch'
@@ -17,6 +19,8 @@ type Page =
   | 'requests'
   | 'orders'
   | 'receipts'
+  | 'inventory'
+  | 'issues'
 
 const navigation: { page: Page; label: string }[] = [
   { page: 'projects', label: 'Projects' },
@@ -25,6 +29,8 @@ const navigation: { page: Page; label: string }[] = [
   { page: 'requests', label: 'Material Requests' },
   { page: 'orders', label: 'Purchase Orders' },
   { page: 'receipts', label: 'Goods Receipts' },
+  { page: 'inventory', label: 'Inventory' },
+  { page: 'issues', label: 'Material Issues' },
 ]
 
 function App() {
@@ -191,6 +197,8 @@ function App() {
       {page === 'requests' && <MaterialRequestsPage />}
       {page === 'orders' && <PurchaseOrdersPage />}
       {page === 'receipts' && <GoodsReceiptsPage />}
+      {page === 'inventory' && <InventoryPage />}
+      {page === 'issues' && <MaterialIssuesPage />}
     </main>
   )
 }

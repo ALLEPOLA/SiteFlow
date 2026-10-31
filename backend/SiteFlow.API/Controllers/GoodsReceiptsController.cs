@@ -8,6 +8,7 @@ using SiteFlow.API.Data;
 using SiteFlow.API.DTOs.GoodsReceipts;
 using SiteFlow.API.Models;
 using SiteFlow.API.Security;
+using SiteFlow.API.Services;
 
 namespace SiteFlow.API.Controllers;
 
@@ -91,7 +92,9 @@ public class GoodsReceiptsController : ControllerBase
             .OrderByDescending(p => p.Id)
             .ToListAsync(cancellationToken);
 
-        var orderIds = orders.Select(p => p.Id).ToList();
+        var orderIds = orders
+            .Select(p => p.Id)
+            .ToList();
 
         var receivedQuantities = await _context.GoodsReceiptLines
             .Where(l =>
@@ -174,9 +177,11 @@ public class GoodsReceiptsController : ControllerBase
             return Unauthorized();
         }
 
-        if (!await _context.Users.AnyAsync(
+        var userExists = await _context.Users.AnyAsync(
             u => u.Id == userId,
-            cancellationToken))
+            cancellationToken);
+
+        if (!userExists)
         {
             return Unauthorized();
         }
@@ -186,7 +191,8 @@ public class GoodsReceiptsController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "ClientRequestId must be a valid nonempty UUID."
+                message =
+                    "ClientRequestId must be a valid nonempty UUID."
             });
         }
 
@@ -215,7 +221,8 @@ public class GoodsReceiptsController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Add between 1 and 100 valid receipt lines."
+                message =
+                    "Add between 1 and 100 valid receipt lines."
             });
         }
 
@@ -227,7 +234,8 @@ public class GoodsReceiptsController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Each purchase order line can appear only once."
+                message =
+                    "Each purchase order line can appear only once."
             });
         }
 
@@ -245,7 +253,7 @@ public class GoodsReceiptsController : ControllerBase
             }
         }
 
-        // Return the saved receipt when a completed submission is retried.
+        // Return the original receipt if a completed submission is retried.
         var existing = await ReceiptQuery()
             .FirstOrDefaultAsync(
                 r => r.ClientRequestId == requestKey,
@@ -261,7 +269,8 @@ public class GoodsReceiptsController : ControllerBase
                 IsolationLevel.ReadCommitted,
                 cancellationToken);
 
-        // Serialize receipts against this purchase order.
+        // Prevent simultaneous deliveries from exceeding order quantities.
+        // The inventory import uses this same purchase order lock.
         var lockedOrders = await _context.PurchaseOrders
             .FromSqlInterpolated(
                 $"""
@@ -283,8 +292,7 @@ public class GoodsReceiptsController : ControllerBase
             });
         }
 
-        // Another identical submission may have completed
-        // while this request waited for the order lock.
+        // Recheck after waiting for the purchase order lock.
         existing = await ReceiptQuery()
             .FirstOrDefaultAsync(
                 r => r.ClientRequestId == requestKey,
@@ -381,7 +389,7 @@ public class GoodsReceiptsController : ControllerBase
                 PurchaseOrderLineId = line.PurchaseOrderLineId,
                 Quantity = line.Quantity,
 
-                // Price comes from the order, not the client.
+                // Always copy the price from the purchase order.
                 UnitCost =
                     orderLines[line.PurchaseOrderLineId].UnitPrice
             }).ToList()
@@ -406,14 +414,22 @@ public class GoodsReceiptsController : ControllerBase
 
         try
         {
+            // Generate receipt and receipt-line IDs.
             await _context.SaveChangesAsync(cancellationToken);
+
+            // Create missing stock movements inside the same transaction.
+            await ReceiptStockPosting.PostMissingAsync(
+                _context,
+                order.Id,
+                cancellationToken);
         }
         catch (DbUpdateException ex)
             when (ex.InnerException is MySqlException { Number: 1062 })
         {
-            // Handles an identical key submitted concurrently
-            // against a different order.
             await transaction.RollbackAsync(cancellationToken);
+
+            // Remove entities from the failed transaction.
+            _context.ChangeTracker.Clear();
 
             var duplicate = await ReceiptQuery()
                 .FirstOrDefaultAsync(
@@ -427,10 +443,12 @@ public class GoodsReceiptsController : ControllerBase
 
             return Conflict(new
             {
-                message = "A duplicate receipt submission was detected."
+                message =
+                    "A duplicate receipt or stock posting was detected. Reload and try again."
             });
         }
 
+        // Both the receipt and stock movements succeed together.
         await transaction.CommitAsync(cancellationToken);
 
         var saved = await ReceiptQuery()

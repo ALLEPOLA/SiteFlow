@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using SiteFlow.API.Data.Configurations;
 using SiteFlow.API.Models;
 
 namespace SiteFlow.API.Data;
@@ -12,7 +13,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     }
 
     public DbSet<Project> Projects => Set<Project>();
+
     public DbSet<Material> Materials => Set<Material>();
+
     public DbSet<Supplier> Suppliers => Set<Supplier>();
 
     public DbSet<MaterialRequest> MaterialRequests =>
@@ -33,6 +36,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<GoodsReceiptLine> GoodsReceiptLines =>
         Set<GoodsReceiptLine>();
 
+    public DbSet<StockMovement> StockMovements =>
+        Set<StockMovement>();
+
+    public DbSet<MaterialIssue> MaterialIssues =>
+        Set<MaterialIssue>();
+
+    public DbSet<MaterialIssueLine> MaterialIssueLines =>
+        Set<MaterialIssueLine>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -47,6 +59,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         ConfigurePurchaseOrderLines(modelBuilder);
         ConfigureGoodsReceipts(modelBuilder);
         ConfigureGoodsReceiptLines(modelBuilder);
+
+        modelBuilder.ApplyConfiguration(
+            new StockMovementConfiguration());
+
+        modelBuilder.ApplyConfiguration(
+            new MaterialIssueConfiguration());
+
+        modelBuilder.ApplyConfiguration(
+            new MaterialIssueLineConfiguration());
     }
 
     private static void ConfigureUsers(ModelBuilder modelBuilder)
