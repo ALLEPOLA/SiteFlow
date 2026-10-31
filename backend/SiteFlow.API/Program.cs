@@ -8,7 +8,6 @@ using SiteFlow.API.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Database
 var connectionString =
     builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
@@ -19,7 +18,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         connectionString,
         new MySqlServerVersion(new Version(8, 0, 36))));
 
-// Identity
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
@@ -38,7 +36,14 @@ builder.Services
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
-// Authentication cookie
+// Revalidate the security stamp on each authenticated request.
+// A password change therefore invalidates old sessions
+// on their next request.
+builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+{
+    options.ValidationInterval = TimeSpan.Zero;
+});
+
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.Name = "SiteFlow.Auth";
@@ -70,7 +75,6 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
-// Require login unless an endpoint uses AllowAnonymous.
 builder.Services.AddAuthorization(options =>
 {
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
@@ -78,16 +82,19 @@ builder.Services.AddAuthorization(options =>
         .Build();
 });
 
-// CSRF protection
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
 });
 
+builder.Services.AddScoped<RequiredPasswordChangeFilter>();
+
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(
         new AutoValidateAntiforgeryTokenAttribute());
+
+    options.Filters.AddService<RequiredPasswordChangeFilter>();
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -113,3 +120,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

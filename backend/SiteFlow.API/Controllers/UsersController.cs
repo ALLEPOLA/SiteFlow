@@ -39,7 +39,7 @@ public class UsersController : ControllerBase
             return BadRequest(new
             {
                 message =
-                    "Choose SiteEngineer, ProjectManager, or ProcurementOfficer."
+                    "Choose SiteEngineer, ProjectManager, ProcurementOfficer, or Storekeeper."
             });
         }
 
@@ -73,12 +73,11 @@ public class UsersController : ControllerBase
         {
             UserName = email,
             Email = email,
-            FullName = dto.FullName.Trim()
+            FullName = dto.FullName.Trim(),
+            MustChangePassword = true
         };
 
-        var created = await _users.CreateAsync(
-            user,
-            dto.Password);
+        var created = await _users.CreateAsync(user, dto.Password);
 
         if (!created.Succeeded)
         {
@@ -90,9 +89,7 @@ public class UsersController : ControllerBase
             });
         }
 
-        var assigned = await _users.AddToRoleAsync(
-            user,
-            dto.Role);
+        var assigned = await _users.AddToRoleAsync(user, dto.Role);
 
         if (!assigned.Succeeded)
         {
@@ -115,7 +112,8 @@ public class UsersController : ControllerBase
             user.Id,
             user.FullName,
             user.Email,
-            role = dto.Role
+            role = dto.Role,
+            user.MustChangePassword
         });
     }
 }
@@ -124,17 +122,17 @@ public class CreateUserDto
 {
     [Required]
     [StringLength(150)]
-    public string FullName { get; set; } = string.Empty;
+    public string FullName { get; set; } = "";
 
     [Required]
     [EmailAddress]
     [StringLength(254)]
-    public string Email { get; set; } = string.Empty;
+    public string Email { get; set; } = "";
 
     [Required]
     [StringLength(128, MinimumLength = 12)]
-    public string Password { get; set; } = string.Empty;
+    public string Password { get; set; } = "";
 
     [Required]
-    public string Role { get; set; } = string.Empty;
+    public string Role { get; set; } = "";
 }

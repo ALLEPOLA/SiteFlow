@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SiteFlow.API.DTOs.Auth;
 using SiteFlow.API.Models;
+using SiteFlow.API.Security;
 
 namespace SiteFlow.API.Controllers;
 
 [ApiController]
 [Route("api/auth")]
+[AllowPasswordChangeRequired]
 public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
@@ -44,6 +46,8 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
+        Response.Headers["Cache-Control"] = "no-store";
+
         var user = await _userManager.FindByEmailAsync(
             request.Email.Trim());
 
@@ -65,7 +69,8 @@ public class AuthController : ControllerBase
         {
             return Unauthorized(new
             {
-                message = "Unable to sign in. Check your credentials or try again later."
+                message =
+                    "Unable to sign in. Check your credentials or try again later."
             });
         }
 
@@ -76,7 +81,8 @@ public class AuthController : ControllerBase
             user.Id,
             user.FullName,
             user.Email,
-            roles
+            roles,
+            user.MustChangePassword
         });
     }
 
@@ -100,7 +106,8 @@ public class AuthController : ControllerBase
             user.Id,
             user.FullName,
             user.Email,
-            roles
+            roles,
+            user.MustChangePassword
         });
     }
 

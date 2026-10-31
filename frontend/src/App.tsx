@@ -9,6 +9,7 @@ import GoodsReceiptsPage from './components/GoodsReceiptsPage'
 import InventoryPage from './components/InventoryPage'
 import MaterialIssuesPage from './components/MaterialIssuesPage'
 import UserManagementPage from './components/UserManagementPage'
+import ProfilePage from './components/ProfilePage'
 import LoginPage from './components/LoginPage'
 import type { AuthUser } from './types/auth'
 import { apiFetch, readApiResponse } from './api/apiFetch'
@@ -25,6 +26,7 @@ type Page =
   | 'inventory'
   | 'issues'
   | 'users'
+  | 'profile'
 
 const navigation: {
   page: Page
@@ -41,12 +43,14 @@ const navigation: {
   { page: 'inventory', label: 'Inventory' },
   { page: 'issues', label: 'Material Issues' },
   { page: 'users', label: 'User Management', adminOnly: true },
+  { page: 'profile', label: 'My Profile' },
 ]
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [checkingSession, setCheckingSession] = useState(true)
   const [sessionError, setSessionError] = useState('')
+  const [loginNotice, setLoginNotice] = useState('')
   const [page, setPage] = useState<Page>('dashboard')
   const [loggingOut, setLoggingOut] = useState(false)
 
@@ -68,13 +72,13 @@ function App() {
           setUser(currentUser)
         }
       } catch (error) {
-        if (controller.signal.aborted) return
-
-        setSessionError(
-          error instanceof Error
-            ? error.message
-            : 'Unable to connect to the server.',
-        )
+        if (!controller.signal.aborted) {
+          setSessionError(
+            error instanceof Error
+              ? error.message
+              : 'Unable to connect to the server.',
+          )
+        }
       } finally {
         if (!controller.signal.aborted) {
           setCheckingSession(false)
@@ -86,6 +90,13 @@ function App() {
 
     return () => controller.abort()
   }, [])
+
+  function endSession(message: string) {
+    setUser(null)
+    setPage('dashboard')
+    setSessionError('')
+    setLoginNotice(message)
+  }
 
   async function handleLogout() {
     if (loggingOut) return
@@ -102,8 +113,7 @@ function App() {
         await readApiResponse<unknown>(response)
       }
 
-      setUser(null)
-      setPage('dashboard')
+      endSession('')
     } catch (error) {
       setSessionError(
         error instanceof Error
@@ -143,13 +153,22 @@ function App() {
     }
 
     return (
-      <LoginPage
-        onLoggedIn={currentUser => {
-          setSessionError('')
-          setPage('dashboard')
-          setUser(currentUser)
-        }}
-      />
+      <>
+        {loginNotice && (
+          <p className="profile-login-notice" role="status">
+            {loginNotice}
+          </p>
+        )}
+
+        <LoginPage
+          onLoggedIn={currentUser => {
+            setSessionError('')
+            setLoginNotice('')
+            setPage('dashboard')
+            setUser(currentUser)
+          }}
+        />
+      </>
     )
   }
 
@@ -187,42 +206,62 @@ function App() {
         </p>
       )}
 
-      <nav
-        className="page-navigation"
-        aria-label="Main navigation"
-      >
-        {visibleNavigation.map(item => (
-          <button
-            key={item.page}
-            type="button"
-            className={
-              page === item.page
-                ? 'nav-button active'
-                : 'nav-button'
-            }
-            aria-current={page === item.page ? 'page' : undefined}
-            onClick={() => setPage(item.page)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      {page === 'dashboard' && (
-        <DashboardPage
-          onNavigate={destination => setPage(destination)}
+      {user.mustChangePassword ? (
+        <ProfilePage
+          user={user}
+          onUpdated={setUser}
+          onSignedOut={endSession}
         />
-      )}
+      ) : (
+        <>
+          <nav
+            className="page-navigation"
+            aria-label="Main navigation"
+          >
+            {visibleNavigation.map(item => (
+              <button
+                key={item.page}
+                type="button"
+                className={
+                  page === item.page
+                    ? 'nav-button active'
+                    : 'nav-button'
+                }
+                aria-current={
+                  page === item.page ? 'page' : undefined
+                }
+                onClick={() => setPage(item.page)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
 
-      {page === 'projects' && <ProjectsPage />}
-      {page === 'materials' && <MaterialsPage />}
-      {page === 'suppliers' && <SuppliersPage />}
-      {page === 'requests' && <MaterialRequestsPage />}
-      {page === 'orders' && <PurchaseOrdersPage />}
-      {page === 'receipts' && <GoodsReceiptsPage />}
-      {page === 'inventory' && <InventoryPage />}
-      {page === 'issues' && <MaterialIssuesPage />}
-      {page === 'users' && isAdmin && <UserManagementPage />}
+          {page === 'dashboard' && (
+            <DashboardPage
+              onNavigate={destination => setPage(destination)}
+            />
+          )}
+
+          {page === 'projects' && <ProjectsPage />}
+          {page === 'materials' && <MaterialsPage />}
+          {page === 'suppliers' && <SuppliersPage />}
+          {page === 'requests' && <MaterialRequestsPage />}
+          {page === 'orders' && <PurchaseOrdersPage />}
+          {page === 'receipts' && <GoodsReceiptsPage />}
+          {page === 'inventory' && <InventoryPage />}
+          {page === 'issues' && <MaterialIssuesPage />}
+          {page === 'users' && isAdmin && <UserManagementPage />}
+
+          {page === 'profile' && (
+            <ProfilePage
+              user={user}
+              onUpdated={setUser}
+              onSignedOut={endSession}
+            />
+          )}
+        </>
+      )}
     </main>
   )
 }

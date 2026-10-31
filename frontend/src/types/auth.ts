@@ -3,4 +3,5 @@ export interface AuthUser {
   fullName: string
   email: string
   roles: string[]
+  mustChangePassword: boolean
 }

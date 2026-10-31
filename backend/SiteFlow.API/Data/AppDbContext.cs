@@ -77,6 +77,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(u => u.FullName)
                 .HasMaxLength(150)
                 .IsRequired();
+
+            entity.Property(u => u.MustChangePassword)
+                .IsRequired();
         });
     }
 
