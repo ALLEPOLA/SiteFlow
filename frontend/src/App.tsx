@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import DashboardPage from './components/DashboardPage'
 import ProjectsPage from './components/ProjectsPage'
 import MaterialsPage from './components/MaterialsPage'
 import SuppliersPage from './components/SuppliersPage'
@@ -7,12 +8,14 @@ import PurchaseOrdersPage from './components/PurchaseOrdersPage'
 import GoodsReceiptsPage from './components/GoodsReceiptsPage'
 import InventoryPage from './components/InventoryPage'
 import MaterialIssuesPage from './components/MaterialIssuesPage'
+import UserManagementPage from './components/UserManagementPage'
 import LoginPage from './components/LoginPage'
 import type { AuthUser } from './types/auth'
 import { apiFetch, readApiResponse } from './api/apiFetch'
 import './App.css'
 
 type Page =
+  | 'dashboard'
   | 'projects'
   | 'materials'
   | 'suppliers'
@@ -21,8 +24,14 @@ type Page =
   | 'receipts'
   | 'inventory'
   | 'issues'
+  | 'users'
 
-const navigation: { page: Page; label: string }[] = [
+const navigation: {
+  page: Page
+  label: string
+  adminOnly?: boolean
+}[] = [
+  { page: 'dashboard', label: 'Dashboard' },
   { page: 'projects', label: 'Projects' },
   { page: 'materials', label: 'Materials' },
   { page: 'suppliers', label: 'Suppliers' },
@@ -31,13 +40,14 @@ const navigation: { page: Page; label: string }[] = [
   { page: 'receipts', label: 'Goods Receipts' },
   { page: 'inventory', label: 'Inventory' },
   { page: 'issues', label: 'Material Issues' },
+  { page: 'users', label: 'User Management', adminOnly: true },
 ]
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [checkingSession, setCheckingSession] = useState(true)
   const [sessionError, setSessionError] = useState('')
-  const [page, setPage] = useState<Page>('projects')
+  const [page, setPage] = useState<Page>('dashboard')
   const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
@@ -93,7 +103,7 @@ function App() {
       }
 
       setUser(null)
-      setPage('projects')
+      setPage('dashboard')
     } catch (error) {
       setSessionError(
         error instanceof Error
@@ -136,11 +146,18 @@ function App() {
       <LoginPage
         onLoggedIn={currentUser => {
           setSessionError('')
+          setPage('dashboard')
           setUser(currentUser)
         }}
       />
     )
   }
+
+  const isAdmin = user.roles.includes('Administrator')
+
+  const visibleNavigation = navigation.filter(
+    item => !item.adminOnly || isAdmin,
+  )
 
   return (
     <main className="app">
@@ -174,7 +191,7 @@ function App() {
         className="page-navigation"
         aria-label="Main navigation"
       >
-        {navigation.map(item => (
+        {visibleNavigation.map(item => (
           <button
             key={item.page}
             type="button"
@@ -191,6 +208,12 @@ function App() {
         ))}
       </nav>
 
+      {page === 'dashboard' && (
+        <DashboardPage
+          onNavigate={destination => setPage(destination)}
+        />
+      )}
+
       {page === 'projects' && <ProjectsPage />}
       {page === 'materials' && <MaterialsPage />}
       {page === 'suppliers' && <SuppliersPage />}
@@ -199,6 +222,7 @@ function App() {
       {page === 'receipts' && <GoodsReceiptsPage />}
       {page === 'inventory' && <InventoryPage />}
       {page === 'issues' && <MaterialIssuesPage />}
+      {page === 'users' && isAdmin && <UserManagementPage />}
     </main>
   )
 }

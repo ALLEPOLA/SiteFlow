@@ -475,3 +475,115 @@ textarea:disabled {
     grid-template-columns: 1fr;
   }
 }
+.dashboard-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid #475569;
+  border-radius: 12px;
+  background: #1e293b;
+  color: #f8fafc;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dashboard-card:hover {
+  border-color: #60a5fa;
+  background: #263449;
+}
+
+.dashboard-card:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 3px;
+}
+
+.dashboard-card strong {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.dashboard-card small {
+  color: #93c5fd;
+}
+
+.dashboard-card span {
+  color: #e2e8f0;
+}
+
+@media (max-width: 500px) {
+  .dashboard-cards {
+    grid-template-columns: 1fr;
+  }
+}
+.user-management-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.user-management-fieldset:disabled {
+  opacity: 0.7;
+}
+
+.user-management-fieldset .form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.user-management-fieldset input,
+.user-management-fieldset select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.user-management-fieldset small {
+  line-height: 1.5;
+}
+.request-review {
+  margin-top: 1.5rem;
+}
+
+.request-review label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.request-review textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.request-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.review-summary {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #cbd5e1;
+}

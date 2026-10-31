@@ -27,6 +27,8 @@ type StockMovement = {
   movementDate: string
   goodsReceiptLineId: number | null
   goodsReceiptId: number | null
+  materialIssueLineId: number | null
+  materialIssueId: number | null
   createdByName: string
   createdAtUtc: string
 }
@@ -59,6 +61,18 @@ function getError(error: unknown) {
     : 'Unable to load inventory.'
 }
 
+function getSourceReference(movement: StockMovement) {
+  if (movement.goodsReceiptId != null) {
+    return `GR-${String(movement.goodsReceiptId).padStart(6, '0')}`
+  }
+
+  if (movement.materialIssueId != null) {
+    return `MI-${String(movement.materialIssueId).padStart(6, '0')}`
+  }
+
+  return '—'
+}
+
 export default function InventoryPage() {
   const [balances, setBalances] = useState<StockBalance[]>([])
   const [movements, setMovements] = useState<MovementPage | null>(null)
@@ -70,6 +84,7 @@ export default function InventoryPage() {
 
   const [balancesLoading, setBalancesLoading] = useState(true)
   const [movementsLoading, setMovementsLoading] = useState(true)
+
   const [balanceError, setBalanceError] = useState('')
   const [movementError, setMovementError] = useState('')
 
@@ -217,6 +232,12 @@ export default function InventoryPage() {
     setRefreshKey(current => current + 1)
   }
 
+  function viewMovements(balance: StockBalance) {
+    setProjectId(String(balance.projectId))
+    setMaterialId(String(balance.materialId))
+    setPage(1)
+  }
+
   return (
     <>
       <header className="page-header">
@@ -350,21 +371,20 @@ export default function InventoryPage() {
                       <br />
                       {balance.projectName}
                     </td>
+
                     <td>{balance.materialCode}</td>
                     <td>{balance.materialName}</td>
                     <td>{balance.unit}</td>
+
                     <td className="number-cell">
                       {formatQuantity(balance.quantityOnHand)}
                     </td>
+
                     <td>
                       <button
                         type="button"
                         className="secondary-button"
-                        onClick={() => {
-                          setProjectId(String(balance.projectId))
-                          setMaterialId(String(balance.materialId))
-                          setPage(1)
-                        }}
+                        onClick={() => viewMovements(balance)}
                       >
                         View movements
                       </button>
@@ -410,17 +430,25 @@ export default function InventoryPage() {
                   {movements.items.map(movement => (
                     <tr key={movement.id}>
                       <td>{movement.movementDate}</td>
-                      <td>{movement.projectName}</td>
+
+                      <td>
+                        <strong>{movement.projectCode}</strong>
+                        <br />
+                        {movement.projectName}
+                      </td>
+
                       <td>
                         <strong>{movement.materialCode}</strong>
                         <br />
                         {movement.materialName}
                       </td>
+
                       <td>
                         <span className="status-badge">
                           {movement.movementType}
                         </span>
                       </td>
+
                       <td
                         className={
                           movement.quantity > 0
@@ -431,15 +459,13 @@ export default function InventoryPage() {
                         {movement.quantity > 0 ? '+' : ''}
                         {formatQuantity(movement.quantity)}
                       </td>
+
                       <td>{movement.unit}</td>
+
                       <td>{formatMoney(movement.unitCost)}</td>
-                      <td>
-                        {movement.goodsReceiptId !== null
-                          ? `GR-${String(
-                              movement.goodsReceiptId,
-                            ).padStart(6, '0')}`
-                          : '—'}
-                      </td>
+
+                      <td>{getSourceReference(movement)}</td>
+
                       <td>{movement.createdByName}</td>
                     </tr>
                   ))}

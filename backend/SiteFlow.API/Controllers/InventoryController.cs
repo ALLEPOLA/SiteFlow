@@ -30,7 +30,8 @@ public class InventoryController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Project and material IDs must be positive."
+                message =
+                    "Project and material IDs must be positive."
             });
         }
 
@@ -92,7 +93,8 @@ public class InventoryController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Project and material IDs must be positive."
+                message =
+                    "Project and material IDs must be positive."
             });
         }
 
@@ -122,7 +124,8 @@ public class InventoryController : ControllerBase
                 m.MaterialId == materialId.Value);
         }
 
-        var totalCount = await query.CountAsync(cancellationToken);
+        var totalCount = await query.CountAsync(
+            cancellationToken);
 
         var items = await query
             .OrderByDescending(m => m.MovementDate)
@@ -133,21 +136,32 @@ public class InventoryController : ControllerBase
             {
                 m.Id,
                 m.ProjectId,
+
                 ProjectCode = m.Project.Code,
                 ProjectName = m.Project.Name,
+
                 m.MaterialId,
+
                 MaterialCode = m.Material.Code,
                 MaterialName = m.Material.Name,
                 Unit = m.Material.Unit,
+
                 m.MovementType,
                 m.Quantity,
                 m.UnitCost,
                 m.MovementDate,
+
                 m.GoodsReceiptLineId,
 
                 GoodsReceiptId = m.GoodsReceiptLine == null
                     ? (int?)null
                     : m.GoodsReceiptLine.GoodsReceiptId,
+
+                m.MaterialIssueLineId,
+
+                MaterialIssueId = m.MaterialIssueLine == null
+                    ? (int?)null
+                    : m.MaterialIssueLine.MaterialIssueId,
 
                 CreatedByName = m.CreatedByUser.FullName,
                 m.CreatedAtUtc
@@ -185,7 +199,6 @@ public class InventoryController : ControllerBase
                     IsolationLevel.ReadCommitted,
                     cancellationToken);
 
-            // Uses the same lock as normal receipt creation.
             var lockedOrders = await _context.PurchaseOrders
                 .FromSqlInterpolated(
                     $"""
@@ -199,7 +212,9 @@ public class InventoryController : ControllerBase
 
             if (lockedOrders.Count == 0)
             {
-                await transaction.RollbackAsync(cancellationToken);
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
                 continue;
             }
 
@@ -209,7 +224,8 @@ public class InventoryController : ControllerBase
                     orderId,
                     cancellationToken);
 
-            await transaction.CommitAsync(cancellationToken);
+            await transaction.CommitAsync(
+                cancellationToken);
 
             _context.ChangeTracker.Clear();
         }

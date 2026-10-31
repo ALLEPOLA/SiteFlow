@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
 
-interface Supplier {
+type Supplier = {
   id: number
   code: string
   name: string
   isActive: boolean
 }
 
-interface AvailableLine {
+type AvailableLine = {
   materialRequestLineId: number
   materialCode: string
   materialName: string
@@ -20,7 +20,7 @@ interface AvailableLine {
   estimatedUnitPrice: number
 }
 
-interface AvailableRequest {
+type AvailableRequest = {
   id: number
   requestNumber: string
   projectName: string
@@ -28,7 +28,7 @@ interface AvailableRequest {
   lines: AvailableLine[]
 }
 
-interface OrderLine {
+type OrderLine = {
   id: number
   materialRequestLineId: number
   materialCode: string
@@ -39,7 +39,7 @@ interface OrderLine {
   lineTotal: number
 }
 
-interface PurchaseOrder {
+type PurchaseOrder = {
   id: number
   orderNumber: string
   requestNumber: string
@@ -50,11 +50,14 @@ interface PurchaseOrder {
   notes: string
   status: string
   createdByName: string
+  issuedByName: string | null
+  issuedAtUtc: string | null
+  canIssue: boolean
   totalAmount: number
   lines: OrderLine[]
 }
 
-interface DraftLine {
+type DraftLine = {
   requestLineId: number
   included: boolean
   quantity: string
@@ -66,17 +69,17 @@ const money = new Intl.NumberFormat('en-LK', {
   currency: 'LKR',
 })
 
-function todayLocal(): string {
+function todayLocal() {
   const date = new Date()
 
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
 }
 
-function calculateTotal(line: DraftLine): number {
+function calculateTotal(line: DraftLine) {
   const quantity = Number(line.quantity)
   const price = Number(line.unitPrice)
 
@@ -84,9 +87,13 @@ function calculateTotal(line: DraftLine): number {
     return 0
   }
 
-  return Math.round(
-    (quantity * price + Number.EPSILON) * 100,
-  ) / 100
+  return Math.round((quantity * price + Number.EPSILON) * 100) / 100
+}
+
+function getError(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : 'Unable to complete the operation.'
 }
 
 export default function PurchaseOrdersPage() {
@@ -114,27 +121,33 @@ export default function PurchaseOrdersPage() {
   const [selectedOrder, setSelectedOrder] =
     useState<PurchaseOrder | null>(null)
 
+  const [issuing, setIssuing] = useState(false)
+  const [issueError, setIssueError] = useState('')
+  const [issueSuccess, setIssueSuccess] = useState('')
+
+  const busyRef = useRef(false)
+
   useEffect(() => {
     const controller = new AbortController()
-    const options = { signal: controller.signal }
+
+    const options: RequestInit = {
+      signal: controller.signal,
+      cache: 'no-store',
+    }
 
     async function load() {
       try {
         const [orderData, user] = await Promise.all([
-          apiFetch('/api/purchase-orders', options).then(
-            (response) =>
-              readApiResponse<PurchaseOrder[]>(response),
+          apiFetch('/api/purchase-orders', options).then(response =>
+            readApiResponse<PurchaseOrder[]>(response),
           ),
 
-          apiFetch('/api/auth/me', {
-            ...options,
-            cache: 'no-store',
-          }).then((response) =>
+          apiFetch('/api/auth/me', options).then(response =>
             readApiResponse<{ roles: string[] }>(response),
           ),
         ])
 
-        const allowed = user.roles.some((role) =>
+        const allowed = user.roles.some(role =>
           ['Administrator', 'ProcurementOfficer'].includes(role),
         )
 
@@ -142,19 +155,21 @@ export default function PurchaseOrdersPage() {
         let supplierData: Supplier[] = []
 
         if (allowed) {
-          ;[requestData, supplierData] = await Promise.all([
+          const results = await Promise.all([
             apiFetch(
               '/api/purchase-orders/available-requests',
               options,
-            ).then((response) =>
+            ).then(response =>
               readApiResponse<AvailableRequest[]>(response),
             ),
 
-            apiFetch('/api/suppliers', options).then(
-              (response) =>
-                readApiResponse<Supplier[]>(response),
+            apiFetch('/api/suppliers', options).then(response =>
+              readApiResponse<Supplier[]>(response),
             ),
           ])
+
+          requestData = results[0]
+          supplierData = results[1]
         }
 
         if (controller.signal.aborted) return
@@ -163,16 +178,12 @@ export default function PurchaseOrdersPage() {
         setCanCreate(allowed)
         setAvailableRequests(requestData)
         setSuppliers(
-          supplierData.filter((supplier) => supplier.isActive),
+          supplierData.filter(supplier => supplier.isActive),
         )
       } catch (error) {
-        if (controller.signal.aborted) return
-
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : 'Unable to load purchase orders.',
-        )
+        if (!controller.signal.aborted) {
+          setLoadError(getError(error))
+        }
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
@@ -186,27 +197,28 @@ export default function PurchaseOrdersPage() {
   }, [])
 
   const selectedRequest = availableRequests.find(
-    (request) => request.id === Number(requestId),
+    request => request.id === Number(requestId),
   )
+
+  const total = draftLines
+    .filter(line => line.included)
+    .reduce((sum, line) => sum + calculateTotal(line), 0)
 
   function selectRequest(value: string) {
     setRequestId(value)
     setFormError('')
-    setSuccess('')
 
     const request = availableRequests.find(
-      (item) => item.id === Number(value),
+      item => item.id === Number(value),
     )
 
     setDraftLines(
-      request
-        ? request.lines.map((line) => ({
-            requestLineId: line.materialRequestLineId,
-            included: true,
-            quantity: String(line.remainingQuantity),
-            unitPrice: String(line.estimatedUnitPrice),
-          }))
-        : [],
+      request?.lines.map(line => ({
+        requestLineId: line.materialRequestLineId,
+        included: true,
+        quantity: String(line.remainingQuantity),
+        unitPrice: String(line.estimatedUnitPrice),
+      })) ?? [],
     )
   }
 
@@ -214,8 +226,8 @@ export default function PurchaseOrdersPage() {
     id: number,
     changes: Partial<Omit<DraftLine, 'requestLineId'>>,
   ) {
-    setDraftLines((current) =>
-      current.map((line) =>
+    setDraftLines(current =>
+      current.map(line =>
         line.requestLineId === id
           ? { ...line, ...changes }
           : line,
@@ -223,16 +235,18 @@ export default function PurchaseOrdersPage() {
     )
   }
 
-  const total = draftLines
-    .filter((line) => line.included)
-    .reduce((sum, line) => sum + calculateTotal(line), 0)
+  function openDetails(order: PurchaseOrder) {
+    if (busyRef.current) return
 
-  async function handleCreate(
-    event: FormEvent<HTMLFormElement>,
-  ) {
+    setSelectedOrder(order)
+    setIssueError('')
+    setIssueSuccess('')
+  }
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (saving) return
+    if (busyRef.current) return
 
     setFormError('')
     setSuccess('')
@@ -251,25 +265,20 @@ export default function PurchaseOrdersPage() {
     }
 
     if (deliveryDate < orderDate) {
-      setFormError(
-        'Delivery date cannot be before the order date.',
-      )
+      setFormError('Delivery date cannot be before the order date.')
       return
     }
 
-    const includedLines = draftLines.filter(
-      (line) => line.included,
-    )
+    const includedLines = draftLines.filter(line => line.included)
 
-    if (includedLines.length === 0) {
-      setFormError('Include at least one material line.')
+    if (includedLines.length === 0 || includedLines.length > 100) {
+      setFormError('Include between 1 and 100 material lines.')
       return
     }
 
     for (const line of includedLines) {
       const available = selectedRequest.lines.find(
-        (item) =>
-          item.materialRequestLineId === line.requestLineId,
+        item => item.materialRequestLineId === line.requestLineId,
       )
 
       const quantity = Number(line.quantity)
@@ -281,10 +290,11 @@ export default function PurchaseOrdersPage() {
         !Number.isFinite(quantity) ||
         quantity <= 0 ||
         quantity > available.remainingQuantity ||
-        quantity > 999999999.999
+        quantity > 999999999.999 ||
+        Math.abs(quantity * 1000 - Math.round(quantity * 1000)) > 0.0001
       ) {
         setFormError(
-          'Each quantity must be positive and within the remaining quantity.',
+          'Enter positive quantities within the remaining amounts, using up to 3 decimal places.',
         )
         return
       }
@@ -293,21 +303,23 @@ export default function PurchaseOrdersPage() {
         !line.unitPrice.trim() ||
         !Number.isFinite(price) ||
         price < 0 ||
-        price > 999999999.99
+        price > 999999999.99 ||
+        Math.abs(price * 100 - Math.round(price * 100)) > 0.0001
       ) {
-        setFormError('Enter a valid nonnegative unit price.')
+        setFormError(
+          'Enter nonnegative prices with up to 2 decimal places.',
+        )
         return
       }
     }
 
+    busyRef.current = true
     setSaving(true)
 
     try {
       const response = await apiFetch('/api/purchase-orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           materialRequestId: selectedRequest.id,
           supplierId: Number(supplierId),
@@ -315,7 +327,7 @@ export default function PurchaseOrdersPage() {
           expectedDeliveryDate: deliveryDate,
           notes: notes.trim() || null,
 
-          lines: includedLines.map((line) => ({
+          lines: includedLines.map(line => ({
             materialRequestLineId: line.requestLineId,
             quantity: Number(line.quantity),
             unitPrice: Number(line.unitPrice),
@@ -323,11 +335,12 @@ export default function PurchaseOrdersPage() {
         }),
       })
 
-      const created =
-        await readApiResponse<PurchaseOrder>(response)
+      const created = await readApiResponse<PurchaseOrder>(response)
 
-      setOrders((current) => [created, ...current])
+      setOrders(current => [created, ...current])
       setSelectedOrder(created)
+      setIssueError('')
+      setIssueSuccess('')
 
       setRequestId('')
       setSupplierId('')
@@ -337,32 +350,68 @@ export default function PurchaseOrdersPage() {
 
       setSuccess(`${created.orderNumber} saved as a draft.`)
 
-      // Refresh availability after the saved order reserves quantities.
       try {
         const availableResponse = await apiFetch(
           '/api/purchase-orders/available-requests',
+          { cache: 'no-store' },
         )
 
-        const updated =
-          await readApiResponse<AvailableRequest[]>(
-            availableResponse,
-          )
-
-        setAvailableRequests(updated)
+        setAvailableRequests(
+          await readApiResponse<AvailableRequest[]>(availableResponse),
+        )
       } catch {
         setAvailableRequests([])
         setWarning(
-          'The order was saved, but available quantities could not be refreshed. Refresh the page before creating another order.',
+          'The order was saved, but available quantities could not refresh. Reload before creating another order.',
         )
       }
     } catch (error) {
-      setFormError(
-        error instanceof Error
-          ? error.message
-          : 'Unable to create purchase order.',
-      )
+      setFormError(getError(error))
     } finally {
+      busyRef.current = false
       setSaving(false)
+    }
+  }
+
+  async function handleIssue(order: PurchaseOrder) {
+    if (busyRef.current) return
+
+    if (
+      !window.confirm(
+        `Issue ${order.orderNumber}? It will become available for receiving deliveries.`,
+      )
+    ) {
+      return
+    }
+
+    busyRef.current = true
+    setIssuing(true)
+    setIssueError('')
+    setIssueSuccess('')
+
+    try {
+      const response = await apiFetch(
+        `/api/purchase-orders/${order.id}/issue`,
+        { method: 'POST' },
+      )
+
+      const updated = await readApiResponse<PurchaseOrder>(response)
+
+      setOrders(current =>
+        current.map(item =>
+          item.id === updated.id ? updated : item,
+        ),
+      )
+
+      setSelectedOrder(updated)
+      setIssueSuccess(
+        `${updated.orderNumber} was issued. You can now record its deliveries under Goods Receipts.`,
+      )
+    } catch (error) {
+      setIssueError(getError(error))
+    } finally {
+      busyRef.current = false
+      setIssuing(false)
     }
   }
 
@@ -382,9 +431,7 @@ export default function PurchaseOrdersPage() {
     <>
       <header className="page-header">
         <h1>Purchase Orders</h1>
-        <p>
-          Purchase approved materials from your suppliers.
-        </p>
+        <p>Purchase approved materials from your suppliers.</p>
       </header>
 
       {canCreate && (
@@ -392,15 +439,11 @@ export default function PurchaseOrdersPage() {
           <h2>Create Purchase Order</h2>
 
           {availableRequests.length === 0 && (
-            <p>
-              No approved requests with available quantities.
-            </p>
+            <p>No approved requests with available quantities.</p>
           )}
 
           {suppliers.length === 0 && (
-            <p className="error-message">
-              Create an active supplier first.
-            </p>
+            <p>Create an active supplier first.</p>
           )}
 
           <form onSubmit={handleCreate}>
@@ -408,79 +451,65 @@ export default function PurchaseOrdersPage() {
               className="form-fields"
               disabled={
                 saving ||
+                issuing ||
                 availableRequests.length === 0 ||
                 suppliers.length === 0
               }
             >
               <div className="form-grid">
-                <label htmlFor="po-request">
+                <label>
                   Approved request
                   <select
-                    id="po-request"
                     value={requestId}
-                    onChange={(event) =>
+                    onChange={event =>
                       selectRequest(event.target.value)
                     }
                     required
                   >
                     <option value="">Select a request</option>
-
-                    {availableRequests.map((request) => (
-                      <option
-                        key={request.id}
-                        value={request.id}
-                      >
-                        {request.requestNumber} —{' '}
-                        {request.projectName}
+                    {availableRequests.map(request => (
+                      <option key={request.id} value={request.id}>
+                        {request.requestNumber} — {request.projectName}
                       </option>
                     ))}
                   </select>
                 </label>
 
-                <label htmlFor="po-supplier">
+                <label>
                   Supplier
                   <select
-                    id="po-supplier"
                     value={supplierId}
-                    onChange={(event) =>
+                    onChange={event =>
                       setSupplierId(event.target.value)
                     }
                     required
                   >
                     <option value="">Select a supplier</option>
-
-                    {suppliers.map((supplier) => (
-                      <option
-                        key={supplier.id}
-                        value={supplier.id}
-                      >
+                    {suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>
                         {supplier.code} — {supplier.name}
                       </option>
                     ))}
                   </select>
                 </label>
 
-                <label htmlFor="po-order-date">
+                <label>
                   Order date
                   <input
-                    id="po-order-date"
                     type="date"
                     value={orderDate}
-                    onChange={(event) =>
-                      setOrderDate(event.target.value)
-                    }
+                    onChange={event => setOrderDate(event.target.value)}
                     required
                   />
                 </label>
 
-                <label htmlFor="po-delivery-date">
+                <label>
                   Expected delivery date
                   <input
-                    id="po-delivery-date"
                     type="date"
                     value={deliveryDate}
                     min={orderDate}
-                    onChange={(event) =>
+                    onChange={event =>
                       setDeliveryDate(event.target.value)
                     }
                     required
@@ -488,14 +517,11 @@ export default function PurchaseOrdersPage() {
                 </label>
               </div>
 
-              <label htmlFor="po-notes">
+              <label>
                 Notes
                 <textarea
-                  id="po-notes"
                   value={notes}
-                  onChange={(event) =>
-                    setNotes(event.target.value)
-                  }
+                  onChange={event => setNotes(event.target.value)}
                   maxLength={1000}
                   rows={3}
                 />
@@ -504,19 +530,17 @@ export default function PurchaseOrdersPage() {
               {selectedRequest && (
                 <>
                   <h3>Material Lines</h3>
-
                   <p>
-                    Uncheck materials you are not purchasing
-                    from this supplier.
+                    Uncheck materials you are not purchasing from
+                    this supplier.
                   </p>
 
-                  {draftLines.map((line) => {
-                    const material =
-                      selectedRequest.lines.find(
-                        (item) =>
-                          item.materialRequestLineId ===
-                          line.requestLineId,
-                      )
+                  {draftLines.map(line => {
+                    const material = selectedRequest.lines.find(
+                      item =>
+                        item.materialRequestLineId ===
+                        line.requestLineId,
+                    )
 
                     if (!material) return null
 
@@ -529,37 +553,27 @@ export default function PurchaseOrdersPage() {
                           <input
                             type="checkbox"
                             checked={line.included}
-                            onChange={(event) =>
-                              updateLine(
-                                line.requestLineId,
-                                {
-                                  included:
-                                    event.target.checked,
-                                },
-                              )
+                            onChange={event =>
+                              updateLine(line.requestLineId, {
+                                included: event.target.checked,
+                              })
                             }
                           />
-
                           {material.materialCode} —{' '}
                           {material.materialName}
                         </label>
 
                         <p>
-                          Approved:{' '}
-                          {material.requestedQuantity}{' '}
+                          Approved: {material.requestedQuantity}{' '}
                           {material.unit} · Ordered:{' '}
-                          {material.orderedQuantity} ·
-                          Remaining:{' '}
+                          {material.orderedQuantity} · Remaining:{' '}
                           {material.remainingQuantity}
                         </p>
 
                         <div className="form-grid">
-                          <label
-                            htmlFor={`po-quantity-${line.requestLineId}`}
-                          >
+                          <label>
                             Order quantity ({material.unit})
                             <input
-                              id={`po-quantity-${line.requestLineId}`}
                               type="number"
                               min="0.001"
                               max={Math.min(
@@ -570,24 +584,17 @@ export default function PurchaseOrdersPage() {
                               value={line.quantity}
                               disabled={!line.included}
                               required={line.included}
-                              onChange={(event) =>
-                                updateLine(
-                                  line.requestLineId,
-                                  {
-                                    quantity:
-                                      event.target.value,
-                                  },
-                                )
+                              onChange={event =>
+                                updateLine(line.requestLineId, {
+                                  quantity: event.target.value,
+                                })
                               }
                             />
                           </label>
 
-                          <label
-                            htmlFor={`po-price-${line.requestLineId}`}
-                          >
+                          <label>
                             Agreed unit price (LKR)
                             <input
-                              id={`po-price-${line.requestLineId}`}
                               type="number"
                               min="0"
                               max="999999999.99"
@@ -595,14 +602,10 @@ export default function PurchaseOrdersPage() {
                               value={line.unitPrice}
                               disabled={!line.included}
                               required={line.included}
-                              onChange={(event) =>
-                                updateLine(
-                                  line.requestLineId,
-                                  {
-                                    unitPrice:
-                                      event.target.value,
-                                  },
-                                )
+                              onChange={event =>
+                                updateLine(line.requestLineId, {
+                                  unitPrice: event.target.value,
+                                })
                               }
                             />
                           </label>
@@ -612,9 +615,7 @@ export default function PurchaseOrdersPage() {
                           Line total:{' '}
                           <strong>
                             {money.format(
-                              line.included
-                                ? calculateTotal(line)
-                                : 0,
+                              line.included ? calculateTotal(line) : 0,
                             )}
                           </strong>
                         </p>
@@ -633,9 +634,7 @@ export default function PurchaseOrdersPage() {
                 type="submit"
                 disabled={!selectedRequest}
               >
-                {saving
-                  ? 'Saving...'
-                  : 'Save Draft Purchase Order'}
+                {saving ? 'Saving...' : 'Save Draft Purchase Order'}
               </button>
             </fieldset>
 
@@ -670,23 +669,18 @@ export default function PurchaseOrdersPage() {
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Order</th>
-                  <th scope="col">Request</th>
-                  <th scope="col">Supplier</th>
-                  <th scope="col">Order date</th>
-                  <th
-                    scope="col"
-                    className="number-cell"
-                  >
-                    Total
-                  </th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Action</th>
+                  <th>Order</th>
+                  <th>Request</th>
+                  <th>Supplier</th>
+                  <th>Order date</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Action</th>
                 </tr>
               </thead>
 
               <tbody>
-                {orders.map((order) => (
+                {orders.map(order => (
                   <tr key={order.id}>
                     <td>{order.orderNumber}</td>
                     <td>{order.requestNumber}</td>
@@ -704,9 +698,8 @@ export default function PurchaseOrdersPage() {
                       <button
                         type="button"
                         className="secondary-button"
-                        onClick={() =>
-                          setSelectedOrder(order)
-                        }
+                        disabled={saving || issuing}
+                        onClick={() => openDetails(order)}
                       >
                         View
                       </button>
@@ -727,51 +720,56 @@ export default function PurchaseOrdersPage() {
             <button
               type="button"
               className="secondary-button"
-              onClick={() => setSelectedOrder(null)}
+              disabled={saving || issuing}
+              onClick={() => {
+                setSelectedOrder(null)
+                setIssueError('')
+                setIssueSuccess('')
+              }}
             >
               Close details
             </button>
           </div>
 
           <p>
-            <strong>Request:</strong>{' '}
-            {selectedOrder.requestNumber}
+            <strong>Request:</strong> {selectedOrder.requestNumber}
           </p>
-
           <p>
-            <strong>Project:</strong>{' '}
-            {selectedOrder.projectName}
+            <strong>Project:</strong> {selectedOrder.projectName}
           </p>
-
           <p>
-            <strong>Supplier:</strong>{' '}
-            {selectedOrder.supplierName}
+            <strong>Supplier:</strong> {selectedOrder.supplierName}
           </p>
-
           <p>
-            <strong>Order date:</strong>{' '}
-            {selectedOrder.orderDate}
+            <strong>Order date:</strong> {selectedOrder.orderDate}
           </p>
-
           <p>
             <strong>Expected delivery:</strong>{' '}
             {selectedOrder.expectedDeliveryDate}
           </p>
-
           <p>
-            <strong>Created by:</strong>{' '}
-            {selectedOrder.createdByName}
+            <strong>Created by:</strong> {selectedOrder.createdByName}
+          </p>
+          <p>
+            <strong>Status:</strong> {selectedOrder.status}
           </p>
 
-          <p>
-            <strong>Status:</strong>{' '}
-            {selectedOrder.status}
-          </p>
+          {selectedOrder.issuedAtUtc && (
+            <>
+              <p>
+                <strong>Issued by:</strong>{' '}
+                {selectedOrder.issuedByName ?? 'Unknown'}
+              </p>
+              <p>
+                <strong>Issued at:</strong>{' '}
+                {new Date(selectedOrder.issuedAtUtc).toLocaleString()}
+              </p>
+            </>
+          )}
 
           {selectedOrder.notes && (
             <p className="request-reason">
-              <strong>Notes:</strong>{' '}
-              {selectedOrder.notes}
+              <strong>Notes:</strong> {selectedOrder.notes}
             </p>
           )}
 
@@ -779,40 +777,22 @@ export default function PurchaseOrdersPage() {
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Material</th>
-                  <th scope="col">Unit</th>
-                  <th
-                    scope="col"
-                    className="number-cell"
-                  >
-                    Quantity
-                  </th>
-                  <th
-                    scope="col"
-                    className="number-cell"
-                  >
-                    Unit price
-                  </th>
-                  <th
-                    scope="col"
-                    className="number-cell"
-                  >
-                    Total
-                  </th>
+                  <th>Material</th>
+                  <th>Unit</th>
+                  <th>Quantity</th>
+                  <th>Unit price</th>
+                  <th>Total</th>
                 </tr>
               </thead>
 
               <tbody>
-                {selectedOrder.lines.map((line) => (
+                {selectedOrder.lines.map(line => (
                   <tr key={line.id}>
                     <td>
-                      {line.materialCode} —{' '}
-                      {line.materialName}
+                      {line.materialCode} — {line.materialName}
                     </td>
                     <td>{line.unit}</td>
-                    <td className="number-cell">
-                      {line.quantity}
-                    </td>
+                    <td className="number-cell">{line.quantity}</td>
                     <td className="number-cell">
                       {money.format(line.unitPrice)}
                     </td>
@@ -826,9 +806,31 @@ export default function PurchaseOrdersPage() {
           </div>
 
           <p className="request-total">
-            Total:{' '}
-            {money.format(selectedOrder.totalAmount)}
+            Total: {money.format(selectedOrder.totalAmount)}
           </p>
+
+          {issueError && (
+            <p className="error-message" role="alert">
+              {issueError}
+            </p>
+          )}
+
+          {issueSuccess && (
+            <p className="success-message" role="status">
+              {issueSuccess}
+            </p>
+          )}
+
+          {selectedOrder.canIssue && (
+            <button
+              type="button"
+              className="primary-button"
+              disabled={saving || issuing}
+              onClick={() => handleIssue(selectedOrder)}
+            >
+              {issuing ? 'Issuing...' : 'Issue Purchase Order'}
+            </button>
+          )}
         </section>
       )}
     </>
