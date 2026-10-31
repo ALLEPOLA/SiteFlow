@@ -23,10 +23,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<MaterialRequestLine> MaterialRequestLines =>
         Set<MaterialRequestLine>();
 
+    public DbSet<PurchaseOrder> PurchaseOrders =>
+        Set<PurchaseOrder>();
+
+    public DbSet<PurchaseOrderLine> PurchaseOrderLines =>
+        Set<PurchaseOrderLine>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
+        // Users
         modelBuilder.Entity<ApplicationUser>(entity =>
         {
             entity.Property(u => u.FullName)
@@ -34,6 +41,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
         });
 
+        // Projects
         modelBuilder.Entity<Project>(entity =>
         {
             entity.HasKey(p => p.Id);
@@ -61,6 +69,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
         });
 
+        // Materials
         modelBuilder.Entity<Material>(entity =>
         {
             entity.HasKey(m => m.Id);
@@ -88,6 +97,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
         });
 
+        // Suppliers
         modelBuilder.Entity<Supplier>(entity =>
         {
             entity.HasKey(s => s.Id);
@@ -123,6 +133,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
         });
 
+        // Material request headers
         modelBuilder.Entity<MaterialRequest>(entity =>
         {
             entity.HasKey(r => r.Id);
@@ -179,6 +190,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // Material request lines
         modelBuilder.Entity<MaterialRequestLine>(entity =>
         {
             entity.HasKey(l => l.Id);
@@ -210,6 +222,98 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 table.HasCheckConstraint(
                     "CK_MaterialRequestLines_EstimatedUnitPrice",
                     "`EstimatedUnitPrice` >= 0");
+            });
+        });
+
+        // Purchase order headers
+        modelBuilder.Entity<PurchaseOrder>(entity =>
+        {
+            entity.HasKey(p => p.Id);
+
+            entity.Property(p => p.OrderDate)
+                .HasColumnType("date")
+                .IsRequired();
+
+            entity.Property(p => p.ExpectedDeliveryDate)
+                .HasColumnType("date")
+                .IsRequired();
+
+            entity.Property(p => p.Notes)
+                .HasMaxLength(1000)
+                .IsRequired();
+
+            entity.Property(p => p.Status)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(p => p.CreatedByUserId)
+                .HasMaxLength(255)
+                .IsRequired();
+
+            entity.Property(p => p.CreatedAtUtc)
+                .HasColumnType("datetime(6)")
+                .IsRequired();
+
+            entity.HasOne(p => p.MaterialRequest)
+                .WithMany()
+                .HasForeignKey(p => p.MaterialRequestId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(p => p.Supplier)
+                .WithMany()
+                .HasForeignKey(p => p.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(p => p.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(p => p.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasMany(p => p.Lines)
+                .WithOne(l => l.PurchaseOrder)
+                .HasForeignKey(l => l.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.ToTable("PurchaseOrders", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_PurchaseOrders_DeliveryDate",
+                    "`ExpectedDeliveryDate` >= `OrderDate`");
+            });
+        });
+
+        // Purchase order lines
+        modelBuilder.Entity<PurchaseOrderLine>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+
+            entity.Property(l => l.Quantity)
+                .HasPrecision(18, 3);
+
+            entity.Property(l => l.UnitPrice)
+                .HasPrecision(18, 2);
+
+            entity.HasOne(l => l.MaterialRequestLine)
+                .WithMany()
+                .HasForeignKey(l => l.MaterialRequestLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(l => new
+            {
+                l.PurchaseOrderId,
+                l.MaterialRequestLineId
+            })
+            .IsUnique();
+
+            entity.ToTable("PurchaseOrderLines", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_PurchaseOrderLines_Quantity",
+                    "`Quantity` > 0");
+
+                table.HasCheckConstraint(
+                    "CK_PurchaseOrderLines_UnitPrice",
+                    "`UnitPrice` >= 0");
             });
         });
     }

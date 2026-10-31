@@ -3,17 +3,25 @@ import ProjectsPage from './components/ProjectsPage'
 import MaterialsPage from './components/MaterialsPage'
 import SuppliersPage from './components/SuppliersPage'
 import MaterialRequestsPage from './components/MaterialRequestsPage'
+import PurchaseOrdersPage from './components/PurchaseOrdersPage'
 import LoginPage from './components/LoginPage'
 import type { AuthUser } from './types/auth'
+import { apiFetch, readApiResponse } from './api/apiFetch'
 import './App.css'
 
-type Page = 'projects' | 'materials' | 'suppliers' | 'requests'
+type Page =
+  | 'projects'
+  | 'materials'
+  | 'suppliers'
+  | 'requests'
+  | 'orders'
 
 const navigation: { page: Page; label: string }[] = [
   { page: 'projects', label: 'Projects' },
   { page: 'materials', label: 'Materials' },
   { page: 'suppliers', label: 'Suppliers' },
   { page: 'requests', label: 'Material Requests' },
+  { page: 'orders', label: 'Purchase Orders' },
 ]
 
 function App() {
@@ -28,20 +36,15 @@ function App() {
 
     async function checkSession() {
       try {
-        const response = await fetch('/api/auth/me', {
+        const response = await apiFetch('/api/auth/me', {
           signal: controller.signal,
           cache: 'no-store',
         })
 
-        if (response.status === 401) {
-          return
-        }
+        if (response.status === 401) return
 
-        if (!response.ok) {
-          throw new Error('Unable to check your session.')
-        }
-
-        const currentUser: AuthUser = await response.json()
+        const currentUser =
+          await readApiResponse<AuthUser>(response)
 
         if (!controller.signal.aborted) {
           setUser(currentUser)
@@ -73,33 +76,21 @@ function App() {
     setSessionError('')
 
     try {
-      // Get a fresh token for the currently authenticated user.
-      const csrfResponse = await fetch('/api/auth/csrf', {
-        cache: 'no-store',
-      })
-
-      if (!csrfResponse.ok) {
-        throw new Error('Unable to initialize logout.')
-      }
-
-      const csrf: { token: string } = await csrfResponse.json()
-
-      const response = await fetch('/api/auth/logout', {
+      const response = await apiFetch('/api/auth/logout', {
         method: 'POST',
-        headers: {
-          'X-CSRF-TOKEN': csrf.token,
-        },
       })
 
       if (!response.ok && response.status !== 401) {
-        throw new Error('Unable to sign out. Please try again.')
+        await readApiResponse<unknown>(response)
       }
 
       setUser(null)
       setPage('projects')
     } catch (error) {
       setSessionError(
-        error instanceof Error ? error.message : 'Logout failed.',
+        error instanceof Error
+          ? error.message
+          : 'Unable to sign out.',
       )
     } finally {
       setLoggingOut(false)
@@ -119,9 +110,11 @@ function App() {
       return (
         <main className="app">
           <p className="error-message" role="alert">
-            {sessionError} Check that the backend is running.
+            {sessionError}
           </p>
+
           <button
+            type="button"
             className="primary-button"
             onClick={() => window.location.reload()}
           >
@@ -149,7 +142,9 @@ function App() {
         <div className="user-menu">
           <div>
             <strong>{user.fullName}</strong>
-            <p className="user-role">{user.roles.join(', ')}</p>
+            <p className="user-role">
+              {user.roles.join(', ')}
+            </p>
           </div>
 
           <button
@@ -169,7 +164,10 @@ function App() {
         </p>
       )}
 
-      <nav className="page-navigation" aria-label="Main navigation">
+      <nav
+        className="page-navigation"
+        aria-label="Main navigation"
+      >
         {navigation.map((item) => (
           <button
             key={item.page}
@@ -179,7 +177,9 @@ function App() {
                 ? 'nav-button active'
                 : 'nav-button'
             }
-            aria-current={page === item.page ? 'page' : undefined}
+            aria-current={
+              page === item.page ? 'page' : undefined
+            }
             onClick={() => setPage(item.page)}
           >
             {item.label}
@@ -191,6 +191,7 @@ function App() {
       {page === 'materials' && <MaterialsPage />}
       {page === 'suppliers' && <SuppliersPage />}
       {page === 'requests' && <MaterialRequestsPage />}
+      {page === 'orders' && <PurchaseOrdersPage />}
     </main>
   )
 }
