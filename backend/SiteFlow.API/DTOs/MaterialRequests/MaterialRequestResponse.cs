@@ -18,6 +18,24 @@ public class MaterialRequestResponse
 
     public DateTime CreatedAtUtc { get; set; }
 
+    public string? CreatedByUserId { get; set; }
+
+    public string CreatedByName { get; set; } = string.Empty;
+
+    public DateTime? SubmittedAtUtc { get; set; }
+
+    public string? ReviewedByUserId { get; set; }
+
+    public string? ReviewedByName { get; set; }
+
+    public DateTime? ReviewedAtUtc { get; set; }
+
+    public string? ReviewComment { get; set; }
+
+    public bool CanSubmit { get; set; }
+
+    public bool CanReview { get; set; }
+
     public decimal TotalEstimatedCost { get; set; }
 
     public List<MaterialRequestLineResponse> Lines { get; set; } = new();

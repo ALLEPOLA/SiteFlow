@@ -27,7 +27,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     {
         base.OnModelCreating(modelBuilder);
 
-        // Identity users
         modelBuilder.Entity<ApplicationUser>(entity =>
         {
             entity.Property(u => u.FullName)
@@ -35,7 +34,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
         });
 
-        // Projects
         modelBuilder.Entity<Project>(entity =>
         {
             entity.HasKey(p => p.Id);
@@ -63,7 +61,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
         });
 
-        // Materials
         modelBuilder.Entity<Material>(entity =>
         {
             entity.HasKey(m => m.Id);
@@ -91,7 +88,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
         });
 
-        // Suppliers
         modelBuilder.Entity<Supplier>(entity =>
         {
             entity.HasKey(s => s.Id);
@@ -127,7 +123,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
         });
 
-        // Material request headers
         modelBuilder.Entity<MaterialRequest>(entity =>
         {
             entity.HasKey(r => r.Id);
@@ -148,9 +143,34 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .HasColumnType("datetime(6)")
                 .IsRequired();
 
+            entity.Property(r => r.CreatedByUserId)
+                .HasMaxLength(255);
+
+            entity.Property(r => r.SubmittedAtUtc)
+                .HasColumnType("datetime(6)");
+
+            entity.Property(r => r.ReviewedByUserId)
+                .HasMaxLength(255);
+
+            entity.Property(r => r.ReviewedAtUtc)
+                .HasColumnType("datetime(6)");
+
+            entity.Property(r => r.ReviewComment)
+                .HasMaxLength(1000);
+
             entity.HasOne(r => r.Project)
                 .WithMany()
                 .HasForeignKey(r => r.ProjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(r => r.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.ReviewedByUser)
+                .WithMany()
+                .HasForeignKey(r => r.ReviewedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasMany(r => r.Lines)
@@ -159,7 +179,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Material request lines
         modelBuilder.Entity<MaterialRequestLine>(entity =>
         {
             entity.HasKey(l => l.Id);

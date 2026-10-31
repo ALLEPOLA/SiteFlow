@@ -35,6 +35,10 @@ interface MaterialRequest {
   requiredDate: string
   reason: string
   status: string
+  createdByUserId: string | null
+  createdByName: string
+  submittedAtUtc: string | null
+  canSubmit: boolean
   totalEstimatedCost: number
   lines: RequestLine[]
 }
@@ -86,6 +90,10 @@ export default function MaterialRequestsPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [selected, setSelected] = useState<MaterialRequest | null>(null)
+
+  const [submittingId, setSubmittingId] = useState<number | null>(null)
+  const [submitError, setSubmitError] = useState('')
+  const [submitSuccess, setSubmitSuccess] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -230,6 +238,31 @@ export default function MaterialRequestsPage() {
       )
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSubmitRequest(id: number) {
+    if (submittingId !== null) return
+    if (!window.confirm('Submit this request for manager approval?')) return
+
+    setSubmittingId(id)
+    setSubmitError('')
+    setSubmitSuccess('')
+
+    try {
+      const response = await apiFetch(`/api/material-requests/${id}/submit`, {
+        method: 'POST',
+      })
+      const updated = await readApiResponse<MaterialRequest>(response)
+      setRequests((current) => current.map((request) =>
+        request.id === updated.id ? updated : request,
+      ))
+      setSelected((current) => current?.id === updated.id ? updated : current)
+      setSubmitSuccess(`${updated.requestNumber} submitted for approval.`)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Unable to submit request.')
+    } finally {
+      setSubmittingId(null)
     }
   }
 
@@ -428,6 +461,8 @@ export default function MaterialRequestsPage() {
 
       <section className="panel">
         <h2>Saved Requests</h2>
+        {submitError && <p className="error-message" role="alert">{submitError}</p>}
+        {submitSuccess && <p className="success-message" role="status">{submitSuccess}</p>}
 
         {!requests.length ? (
           <p>No requests found.</p>
@@ -463,6 +498,17 @@ export default function MaterialRequestsPage() {
                       >
                         View
                       </button>
+                      {request.canSubmit && (
+                        <button
+                          type="button"
+                          className="primary-button"
+                          style={{ marginLeft: 8 }}
+                          disabled={submittingId !== null}
+                          onClick={() => handleSubmitRequest(request.id)}
+                        >
+                          {submittingId === request.id ? 'Submitting...' : 'Submit'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -488,6 +534,10 @@ export default function MaterialRequestsPage() {
           <p><strong>Project:</strong> {selected.projectName}</p>
           <p><strong>Required date:</strong> {selected.requiredDate}</p>
           <p><strong>Status:</strong> {selected.status}</p>
+          <p><strong>Created by:</strong> {selected.createdByName}</p>
+          {selected.submittedAtUtc && (
+            <p><strong>Submitted:</strong> {new Date(selected.submittedAtUtc).toLocaleString()}</p>
+          )}
           <p className="request-reason">
             <strong>Reason:</strong> {selected.reason}
           </p>

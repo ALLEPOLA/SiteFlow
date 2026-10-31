@@ -273,6 +273,10 @@ namespace SiteFlow.API.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
@@ -284,14 +288,32 @@ namespace SiteFlow.API.Migrations
                     b.Property<DateOnly>("RequiredDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("ReviewComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)");
 
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedByUserId");
+
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("ReviewedByUserId");
 
                     b.ToTable("MaterialRequests");
                 });
@@ -475,13 +497,27 @@ namespace SiteFlow.API.Migrations
 
             modelBuilder.Entity("SiteFlow.API.Models.MaterialRequest", b =>
                 {
+                    b.HasOne("SiteFlow.API.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SiteFlow.API.Models.Project", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SiteFlow.API.Models.ApplicationUser", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CreatedByUser");
+
                     b.Navigation("Project");
+
+                    b.Navigation("ReviewedByUser");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.MaterialRequestLine", b =>
