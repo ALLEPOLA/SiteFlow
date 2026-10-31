@@ -1,0 +1,24 @@
+.git
+.vscode
+**/node_modules
+**/bin
+**/obj
+**/dist
+**/TestResults
+**/coverage
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/.env
+**/.env.*
+**/*.pem
+**/*.pfx
+**/*.sql
+**/*.log
+# Local configuration and deployment certificates
+**/appsettings.Local.json
+*.pem
+*.pfx
+*.sql
+
+# Test output
+**/TestResults/
