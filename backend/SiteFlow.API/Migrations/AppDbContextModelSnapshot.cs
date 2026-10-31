@@ -223,6 +223,97 @@ namespace SiteFlow.API.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("SiteFlow.API.Models.GoodsReceipt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClientRequestId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("DeliveryNoteNumber")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<int>("PurchaseOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("ReceivedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("PurchaseOrderId");
+
+                    b.ToTable("GoodsReceipts");
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.GoodsReceiptLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("GoodsReceiptId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PurchaseOrderLineId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseOrderLineId");
+
+                    b.HasIndex("GoodsReceiptId", "PurchaseOrderLineId")
+                        .IsUnique();
+
+                    b.ToTable("GoodsReceiptLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_GoodsReceiptLines_Quantity", "`Quantity` > 0");
+
+                            t.HasCheckConstraint("CK_GoodsReceiptLines_UnitCost", "`UnitCost` >= 0");
+                        });
+                });
+
             modelBuilder.Entity("SiteFlow.API.Models.Material", b =>
                 {
                     b.Property<int>("Id")
@@ -414,6 +505,13 @@ namespace SiteFlow.API.Migrations
                     b.Property<DateOnly>("ExpectedDeliveryDate")
                         .HasColumnType("date");
 
+                    b.Property<DateTime?>("IssuedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("IssuedByUserId")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
                     b.Property<int>("MaterialRequestId")
                         .HasColumnType("int");
 
@@ -436,6 +534,8 @@ namespace SiteFlow.API.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("IssuedByUserId");
 
                     b.HasIndex("MaterialRequestId");
 
@@ -584,6 +684,44 @@ namespace SiteFlow.API.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SiteFlow.API.Models.GoodsReceipt", b =>
+                {
+                    b.HasOne("SiteFlow.API.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SiteFlow.API.Models.PurchaseOrder", "PurchaseOrder")
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("PurchaseOrder");
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.GoodsReceiptLine", b =>
+                {
+                    b.HasOne("SiteFlow.API.Models.GoodsReceipt", "GoodsReceipt")
+                        .WithMany("Lines")
+                        .HasForeignKey("GoodsReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SiteFlow.API.Models.PurchaseOrderLine", "PurchaseOrderLine")
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("GoodsReceipt");
+
+                    b.Navigation("PurchaseOrderLine");
+                });
+
             modelBuilder.Entity("SiteFlow.API.Models.MaterialRequest", b =>
                 {
                     b.HasOne("SiteFlow.API.Models.ApplicationUser", "CreatedByUser")
@@ -636,6 +774,11 @@ namespace SiteFlow.API.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SiteFlow.API.Models.ApplicationUser", "IssuedByUser")
+                        .WithMany()
+                        .HasForeignKey("IssuedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SiteFlow.API.Models.MaterialRequest", "MaterialRequest")
                         .WithMany()
                         .HasForeignKey("MaterialRequestId")
@@ -649,6 +792,8 @@ namespace SiteFlow.API.Migrations
                         .IsRequired();
 
                     b.Navigation("CreatedByUser");
+
+                    b.Navigation("IssuedByUser");
 
                     b.Navigation("MaterialRequest");
 
@@ -672,6 +817,11 @@ namespace SiteFlow.API.Migrations
                     b.Navigation("MaterialRequestLine");
 
                     b.Navigation("PurchaseOrder");
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.GoodsReceipt", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.MaterialRequest", b =>

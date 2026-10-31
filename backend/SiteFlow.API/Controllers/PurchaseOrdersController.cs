@@ -28,6 +28,7 @@ public class PurchaseOrdersController : ControllerBase
             .AsNoTracking()
             .Include(p => p.Supplier)
             .Include(p => p.CreatedByUser)
+            .Include(p => p.IssuedByUser)
             .Include(p => p.MaterialRequest)
                 .ThenInclude(r => r.Project)
             .Include(p => p.Lines)
@@ -84,23 +85,20 @@ public class PurchaseOrdersController : ControllerBase
             .OrderByDescending(r => r.Id)
             .ToListAsync(cancellationToken);
 
-        var requestIds = requests
-            .Select(r => r.Id)
-            .ToList();
+        var requestIds = requests.Select(r => r.Id).ToList();
 
         var orderedQuantities = await _context.PurchaseOrderLines
             .Where(l =>
-                requestIds.Contains(
-                    l.PurchaseOrder.MaterialRequestId) &&
+                requestIds.Contains(l.PurchaseOrder.MaterialRequestId) &&
                 l.PurchaseOrder.Status != "Cancelled")
             .GroupBy(l => l.MaterialRequestLineId)
             .Select(group => new
             {
-                MaterialRequestLineId = group.Key,
+                Id = group.Key,
                 Quantity = group.Sum(l => l.Quantity)
             })
             .ToDictionaryAsync(
-                item => item.MaterialRequestLineId,
+                item => item.Id,
                 item => item.Quantity,
                 cancellationToken);
 
@@ -108,14 +106,11 @@ public class PurchaseOrdersController : ControllerBase
 
         foreach (var request in requests)
         {
-            var availableLines =
-                new List<AvailableRequestLineResponse>();
+            var lines = new List<AvailableRequestLineResponse>();
 
             foreach (var line in request.Lines)
             {
-                var ordered = orderedQuantities.GetValueOrDefault(
-                    line.Id);
-
+                var ordered = orderedQuantities.GetValueOrDefault(line.Id);
                 var remaining = line.Quantity - ordered;
 
                 if (remaining <= 0 || !line.Material.IsActive)
@@ -123,7 +118,7 @@ public class PurchaseOrdersController : ControllerBase
                     continue;
                 }
 
-                availableLines.Add(new AvailableRequestLineResponse
+                lines.Add(new AvailableRequestLineResponse
                 {
                     MaterialRequestLineId = line.Id,
                     MaterialCode = line.Material.Code,
@@ -136,7 +131,7 @@ public class PurchaseOrdersController : ControllerBase
                 });
             }
 
-            if (availableLines.Count > 0)
+            if (lines.Count > 0)
             {
                 result.Add(new AvailableRequestResponse
                 {
@@ -144,7 +139,7 @@ public class PurchaseOrdersController : ControllerBase
                     RequestNumber = $"MR-{request.Id:D6}",
                     ProjectName = request.Project.Name,
                     RequiredDate = request.RequiredDate,
-                    Lines = availableLines
+                    Lines = lines
                 });
             }
         }
@@ -159,20 +154,16 @@ public class PurchaseOrdersController : ControllerBase
         CreatePurchaseOrderDto dto,
         CancellationToken cancellationToken)
     {
-        var userId = User.FindFirstValue(
-            ClaimTypes.NameIdentifier);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrWhiteSpace(userId))
         {
             return Unauthorized();
         }
 
-        var creatorExists = await _context.Users
-            .AnyAsync(
-                u => u.Id == userId,
-                cancellationToken);
-
-        if (!creatorExists)
+        if (!await _context.Users.AnyAsync(
+            u => u.Id == userId,
+            cancellationToken))
         {
             return Unauthorized();
         }
@@ -182,7 +173,7 @@ public class PurchaseOrdersController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Order date and expected delivery date are required."
+                message = "Order and expected delivery dates are required."
             });
         }
 
@@ -190,8 +181,7 @@ public class PurchaseOrdersController : ControllerBase
         {
             return BadRequest(new
             {
-                message =
-                    "Expected delivery date cannot be before the order date."
+                message = "Delivery date cannot be before the order date."
             });
         }
 
@@ -206,17 +196,15 @@ public class PurchaseOrdersController : ControllerBase
             });
         }
 
-        var requestedLineIds = dto.Lines
+        var lineIds = dto.Lines
             .Select(l => l.MaterialRequestLineId)
             .ToList();
 
-        if (requestedLineIds.Distinct().Count() !=
-            requestedLineIds.Count)
+        if (lineIds.Distinct().Count() != lineIds.Count)
         {
             return BadRequest(new
             {
-                message =
-                    "Each request line can appear only once per purchase order."
+                message = "Each request line can appear only once."
             });
         }
 
@@ -229,7 +217,7 @@ public class PurchaseOrdersController : ControllerBase
                 return BadRequest(new
                 {
                     message =
-                        "Quantities must be positive, within range, and have at most 3 decimal places."
+                        "Enter a positive quantity within range, with at most 3 decimal places."
                 });
             }
 
@@ -240,18 +228,17 @@ public class PurchaseOrdersController : ControllerBase
                 return BadRequest(new
                 {
                     message =
-                        "Prices must be nonnegative, within range, and have at most 2 decimal places."
+                        "Enter a nonnegative price within range, with at most 2 decimal places."
                 });
             }
         }
 
-        // All order creation for the same request is serialized
-        // by locking the request header.
         await using var transaction =
             await _context.Database.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
                 cancellationToken);
 
+        // Serialize order creation for this material request.
         var lockedRequests = await _context.MaterialRequests
             .FromSqlInterpolated(
                 $"""
@@ -265,34 +252,25 @@ public class PurchaseOrdersController : ControllerBase
 
         var request = lockedRequests.SingleOrDefault();
 
-        if (request is null)
+        if (request is null || request.Status != "Approved")
         {
             return BadRequest(new
             {
-                message = "Material request not found."
+                message = "Select an approved material request."
             });
         }
 
-        if (request.Status != "Approved")
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Purchase orders require an approved material request."
-            });
-        }
-
-        var activeProject = await _context.Projects
+        var projectActive = await _context.Projects
             .AnyAsync(
                 p => p.Id == request.ProjectId &&
                      p.Status == "Active",
                 cancellationToken);
 
-        if (!activeProject)
+        if (!projectActive)
         {
             return BadRequest(new
             {
-                message = "The request's project must be active."
+                message = "The project must be active."
             });
         }
 
@@ -315,17 +293,15 @@ public class PurchaseOrdersController : ControllerBase
             .Include(l => l.Material)
             .Where(l =>
                 l.MaterialRequestId == request.Id &&
-                requestedLineIds.Contains(l.Id))
-            .ToDictionaryAsync(
-                l => l.Id,
-                cancellationToken);
+                lineIds.Contains(l.Id))
+            .ToDictionaryAsync(l => l.Id, cancellationToken);
 
-        if (approvedLines.Count != requestedLineIds.Count)
+        if (approvedLines.Count != lineIds.Count)
         {
             return BadRequest(new
             {
                 message =
-                    "Every order line must belong to the selected material request."
+                    "All lines must belong to the selected material request."
             });
         }
 
@@ -337,7 +313,6 @@ public class PurchaseOrdersController : ControllerBase
             });
         }
 
-        // Draft orders reserve quantities too.
         var orderedQuantities = await _context.PurchaseOrderLines
             .Where(l =>
                 l.PurchaseOrder.MaterialRequestId == request.Id &&
@@ -345,32 +320,29 @@ public class PurchaseOrdersController : ControllerBase
             .GroupBy(l => l.MaterialRequestLineId)
             .Select(group => new
             {
-                MaterialRequestLineId = group.Key,
+                Id = group.Key,
                 Quantity = group.Sum(l => l.Quantity)
             })
             .ToDictionaryAsync(
-                item => item.MaterialRequestLineId,
+                item => item.Id,
                 item => item.Quantity,
                 cancellationToken);
 
         foreach (var line in dto.Lines)
         {
-            var approvedLine =
-                approvedLines[line.MaterialRequestLineId];
+            var approved = approvedLines[line.MaterialRequestLineId];
 
-            var alreadyOrdered =
-                orderedQuantities.GetValueOrDefault(
-                    line.MaterialRequestLineId);
+            var ordered = orderedQuantities.GetValueOrDefault(
+                line.MaterialRequestLineId);
 
-            var remaining =
-                approvedLine.Quantity - alreadyOrdered;
+            var remaining = approved.Quantity - ordered;
 
             if (line.Quantity > remaining)
             {
                 return Conflict(new
                 {
                     message =
-                        $"Only {remaining} {approvedLine.Material.Unit} remain available for {approvedLine.Material.Name}."
+                        $"Only {remaining} {approved.Material.Unit} remain for {approved.Material.Name}."
                 });
             }
         }
@@ -385,12 +357,9 @@ public class PurchaseOrdersController : ControllerBase
             Status = "Draft",
             CreatedByUserId = userId,
             CreatedAtUtc = DateTime.UtcNow,
-
             Lines = dto.Lines.Select(line => new PurchaseOrderLine
             {
-                MaterialRequestLineId =
-                    line.MaterialRequestLineId,
-
+                MaterialRequestLineId = line.MaterialRequestLineId,
                 Quantity = line.Quantity,
                 UnitPrice = line.UnitPrice
             }).ToList()
@@ -412,33 +381,124 @@ public class PurchaseOrdersController : ControllerBase
             ToResponse(savedOrder));
     }
 
-    private static PurchaseOrderResponse ToResponse(
-        PurchaseOrder order)
+    [HttpPost("{id:int}/issue")]
+    [Authorize(
+        Roles = AppRoles.Administrator + "," + AppRoles.ProcurementOfficer)]
+    public async Task<ActionResult<PurchaseOrderResponse>> Issue(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized();
+        }
+
+        if (!await _context.Users.AnyAsync(
+            u => u.Id == userId,
+            cancellationToken))
+        {
+            return Unauthorized();
+        }
+
+        var order = await OrderQuery()
+            .FirstOrDefaultAsync(
+                p => p.Id == id,
+                cancellationToken);
+
+        if (order is null)
+        {
+            return NotFound(new
+            {
+                message = "Purchase order not found."
+            });
+        }
+
+        if (order.Status != "Draft")
+        {
+            return Conflict(new
+            {
+                message = "Only draft purchase orders can be issued."
+            });
+        }
+
+        if (!order.Supplier.IsActive)
+        {
+            return BadRequest(new
+            {
+                message = "The supplier must be active."
+            });
+        }
+
+        if (order.MaterialRequest.Status != "Approved" ||
+            order.MaterialRequest.Project.Status != "Active")
+        {
+            return BadRequest(new
+            {
+                message =
+                    "The material request must be approved and its project active."
+            });
+        }
+
+        if (order.Lines.Count == 0 ||
+            order.Lines.Any(l =>
+                l.Quantity <= 0 ||
+                l.UnitPrice < 0 ||
+                !l.MaterialRequestLine.Material.IsActive))
+        {
+            return BadRequest(new
+            {
+                message = "Check the materials, quantities, and prices."
+            });
+        }
+
+        var issuedAt = DateTime.UtcNow;
+
+        var affectedRows = await _context.PurchaseOrders
+            .Where(p =>
+                p.Id == id &&
+                p.Status == "Draft" &&
+                p.Supplier.IsActive &&
+                p.MaterialRequest.Status == "Approved" &&
+                p.MaterialRequest.Project.Status == "Active" &&
+                p.Lines.Any() &&
+                !p.Lines.Any(l =>
+                    l.Quantity <= 0 ||
+                    l.UnitPrice < 0 ||
+                    !l.MaterialRequestLine.Material.IsActive))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(p => p.Status, "Issued")
+                    .SetProperty(p => p.IssuedByUserId, userId)
+                    .SetProperty(p => p.IssuedAtUtc, issuedAt),
+                cancellationToken);
+
+        if (affectedRows != 1)
+        {
+            return Conflict(new
+            {
+                message = "The order changed. Refresh and try again."
+            });
+        }
+
+        return await GetById(id, cancellationToken);
+    }
+
+    private PurchaseOrderResponse ToResponse(PurchaseOrder order)
     {
         var lines = order.Lines
             .OrderBy(l => l.Id)
             .Select(line => new PurchaseOrderLineResponse
             {
                 Id = line.Id,
-
-                MaterialRequestLineId =
-                    line.MaterialRequestLineId,
-
-                MaterialId =
-                    line.MaterialRequestLine.MaterialId,
-
-                MaterialCode =
-                    line.MaterialRequestLine.Material.Code,
-
-                MaterialName =
-                    line.MaterialRequestLine.Material.Name,
-
-                Unit =
-                    line.MaterialRequestLine.Material.Unit,
-
+                MaterialRequestLineId = line.MaterialRequestLineId,
+                MaterialId = line.MaterialRequestLine.MaterialId,
+                MaterialCode = line.MaterialRequestLine.Material.Code,
+                MaterialName = line.MaterialRequestLine.Material.Name,
+                Unit = line.MaterialRequestLine.Material.Unit,
                 Quantity = line.Quantity,
                 UnitPrice = line.UnitPrice,
-
                 LineTotal = decimal.Round(
                     line.Quantity * line.UnitPrice,
                     2,
@@ -461,6 +521,15 @@ public class PurchaseOrdersController : ControllerBase
             Status = order.Status,
             CreatedByName = order.CreatedByUser.FullName,
             CreatedAtUtc = order.CreatedAtUtc,
+            IssuedByName = order.IssuedByUser?.FullName,
+            IssuedAtUtc = order.IssuedAtUtc,
+
+            CanIssue = order.Status == "Draft" &&
+                (
+                    User.IsInRole(AppRoles.Administrator) ||
+                    User.IsInRole(AppRoles.ProcurementOfficer)
+                ),
+
             TotalAmount = lines.Sum(l => l.LineTotal),
             Lines = lines
         };

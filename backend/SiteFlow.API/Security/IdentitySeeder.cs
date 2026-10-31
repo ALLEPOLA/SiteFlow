@@ -23,7 +23,8 @@ public static class IdentitySeeder
             AppRoles.Administrator,
             AppRoles.SiteEngineer,
             AppRoles.ProjectManager,
-            AppRoles.ProcurementOfficer
+            AppRoles.ProcurementOfficer,
+              AppRoles.Storekeeper
         };
 
         foreach (var role in roles)

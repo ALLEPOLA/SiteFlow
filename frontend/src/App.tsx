@@ -4,6 +4,7 @@ import MaterialsPage from './components/MaterialsPage'
 import SuppliersPage from './components/SuppliersPage'
 import MaterialRequestsPage from './components/MaterialRequestsPage'
 import PurchaseOrdersPage from './components/PurchaseOrdersPage'
+import GoodsReceiptsPage from './components/GoodsReceiptsPage'
 import LoginPage from './components/LoginPage'
 import type { AuthUser } from './types/auth'
 import { apiFetch, readApiResponse } from './api/apiFetch'
@@ -15,6 +16,7 @@ type Page =
   | 'suppliers'
   | 'requests'
   | 'orders'
+  | 'receipts'
 
 const navigation: { page: Page; label: string }[] = [
   { page: 'projects', label: 'Projects' },
@@ -22,6 +24,7 @@ const navigation: { page: Page; label: string }[] = [
   { page: 'suppliers', label: 'Suppliers' },
   { page: 'requests', label: 'Material Requests' },
   { page: 'orders', label: 'Purchase Orders' },
+  { page: 'receipts', label: 'Goods Receipts' },
 ]
 
 function App() {
@@ -43,8 +46,7 @@ function App() {
 
         if (response.status === 401) return
 
-        const currentUser =
-          await readApiResponse<AuthUser>(response)
+        const currentUser = await readApiResponse<AuthUser>(response)
 
         if (!controller.signal.aborted) {
           setUser(currentUser)
@@ -126,7 +128,7 @@ function App() {
 
     return (
       <LoginPage
-        onLoggedIn={(currentUser) => {
+        onLoggedIn={currentUser => {
           setSessionError('')
           setUser(currentUser)
         }}
@@ -142,9 +144,7 @@ function App() {
         <div className="user-menu">
           <div>
             <strong>{user.fullName}</strong>
-            <p className="user-role">
-              {user.roles.join(', ')}
-            </p>
+            <p className="user-role">{user.roles.join(', ')}</p>
           </div>
 
           <button
@@ -168,7 +168,7 @@ function App() {
         className="page-navigation"
         aria-label="Main navigation"
       >
-        {navigation.map((item) => (
+        {navigation.map(item => (
           <button
             key={item.page}
             type="button"
@@ -177,9 +177,7 @@ function App() {
                 ? 'nav-button active'
                 : 'nav-button'
             }
-            aria-current={
-              page === item.page ? 'page' : undefined
-            }
+            aria-current={page === item.page ? 'page' : undefined}
             onClick={() => setPage(item.page)}
           >
             {item.label}
@@ -192,6 +190,7 @@ function App() {
       {page === 'suppliers' && <SuppliersPage />}
       {page === 'requests' && <MaterialRequestsPage />}
       {page === 'orders' && <PurchaseOrdersPage />}
+      {page === 'receipts' && <GoodsReceiptsPage />}
     </main>
   )
 }

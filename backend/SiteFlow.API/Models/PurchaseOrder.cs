@@ -26,5 +26,11 @@ public class PurchaseOrder
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    public string? IssuedByUserId { get; set; }
+
+    public ApplicationUser? IssuedByUser { get; set; }
+
+    public DateTime? IssuedAtUtc { get; set; }
+
     public List<PurchaseOrderLine> Lines { get; set; } = new();
 }

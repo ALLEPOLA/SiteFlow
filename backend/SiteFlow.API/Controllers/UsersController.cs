@@ -30,7 +30,8 @@ public class UsersController : ControllerBase
         {
             AppRoles.SiteEngineer,
             AppRoles.ProjectManager,
-            AppRoles.ProcurementOfficer
+            AppRoles.ProcurementOfficer,
+            AppRoles.Storekeeper
         };
 
         if (!allowedRoles.Contains(dto.Role))

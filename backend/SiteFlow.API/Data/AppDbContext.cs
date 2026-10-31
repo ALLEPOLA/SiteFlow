@@ -12,9 +12,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     }
 
     public DbSet<Project> Projects => Set<Project>();
-
     public DbSet<Material> Materials => Set<Material>();
-
     public DbSet<Supplier> Suppliers => Set<Supplier>();
 
     public DbSet<MaterialRequest> MaterialRequests =>
@@ -29,19 +27,40 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PurchaseOrderLine> PurchaseOrderLines =>
         Set<PurchaseOrderLine>();
 
+    public DbSet<GoodsReceipt> GoodsReceipts =>
+        Set<GoodsReceipt>();
+
+    public DbSet<GoodsReceiptLine> GoodsReceiptLines =>
+        Set<GoodsReceiptLine>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // Users
+        ConfigureUsers(modelBuilder);
+        ConfigureProjects(modelBuilder);
+        ConfigureMaterials(modelBuilder);
+        ConfigureSuppliers(modelBuilder);
+        ConfigureMaterialRequests(modelBuilder);
+        ConfigureMaterialRequestLines(modelBuilder);
+        ConfigurePurchaseOrders(modelBuilder);
+        ConfigurePurchaseOrderLines(modelBuilder);
+        ConfigureGoodsReceipts(modelBuilder);
+        ConfigureGoodsReceiptLines(modelBuilder);
+    }
+
+    private static void ConfigureUsers(ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<ApplicationUser>(entity =>
         {
             entity.Property(u => u.FullName)
                 .HasMaxLength(150)
                 .IsRequired();
         });
+    }
 
-        // Projects
+    private static void ConfigureProjects(ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<Project>(entity =>
         {
             entity.HasKey(p => p.Id);
@@ -68,8 +87,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .HasMaxLength(20)
                 .IsRequired();
         });
+    }
 
-        // Materials
+    private static void ConfigureMaterials(ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<Material>(entity =>
         {
             entity.HasKey(m => m.Id);
@@ -96,8 +117,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(m => m.IsActive)
                 .IsRequired();
         });
+    }
 
-        // Suppliers
+    private static void ConfigureSuppliers(ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<Supplier>(entity =>
         {
             entity.HasKey(s => s.Id);
@@ -132,8 +155,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(s => s.IsActive)
                 .IsRequired();
         });
+    }
 
-        // Material request headers
+    private static void ConfigureMaterialRequests(
+        ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<MaterialRequest>(entity =>
         {
             entity.HasKey(r => r.Id);
@@ -189,8 +215,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .HasForeignKey(l => l.MaterialRequestId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+    }
 
-        // Material request lines
+    private static void ConfigureMaterialRequestLines(
+        ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<MaterialRequestLine>(entity =>
         {
             entity.HasKey(l => l.Id);
@@ -224,8 +253,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                     "`EstimatedUnitPrice` >= 0");
             });
         });
+    }
 
-        // Purchase order headers
+    private static void ConfigurePurchaseOrders(
+        ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<PurchaseOrder>(entity =>
         {
             entity.HasKey(p => p.Id);
@@ -254,6 +286,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .HasColumnType("datetime(6)")
                 .IsRequired();
 
+            entity.Property(p => p.IssuedByUserId)
+                .HasMaxLength(255);
+
+            entity.Property(p => p.IssuedAtUtc)
+                .HasColumnType("datetime(6)");
+
             entity.HasOne(p => p.MaterialRequest)
                 .WithMany()
                 .HasForeignKey(p => p.MaterialRequestId)
@@ -269,6 +307,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .HasForeignKey(p => p.CreatedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            entity.HasOne(p => p.IssuedByUser)
+                .WithMany()
+                .HasForeignKey(p => p.IssuedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasMany(p => p.Lines)
                 .WithOne(l => l.PurchaseOrder)
                 .HasForeignKey(l => l.PurchaseOrderId)
@@ -281,8 +324,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                     "`ExpectedDeliveryDate` >= `OrderDate`");
             });
         });
+    }
 
-        // Purchase order lines
+    private static void ConfigurePurchaseOrderLines(
+        ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<PurchaseOrderLine>(entity =>
         {
             entity.HasKey(l => l.Id);
@@ -314,6 +360,99 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 table.HasCheckConstraint(
                     "CK_PurchaseOrderLines_UnitPrice",
                     "`UnitPrice` >= 0");
+            });
+        });
+    }
+
+    private static void ConfigureGoodsReceipts(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<GoodsReceipt>(entity =>
+        {
+            entity.HasKey(r => r.Id);
+
+            entity.Property(r => r.ClientRequestId)
+                .HasMaxLength(36)
+                .IsRequired();
+
+            entity.HasIndex(r => r.ClientRequestId)
+                .IsUnique();
+
+            entity.Property(r => r.ReceivedDate)
+                .HasColumnType("date")
+                .IsRequired();
+
+            entity.Property(r => r.DeliveryNoteNumber)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(r => r.Notes)
+                .HasMaxLength(1000)
+                .IsRequired();
+
+            entity.Property(r => r.Status)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(r => r.CreatedByUserId)
+                .HasMaxLength(255)
+                .IsRequired();
+
+            entity.Property(r => r.CreatedAtUtc)
+                .HasColumnType("datetime(6)")
+                .IsRequired();
+
+            entity.HasOne(r => r.PurchaseOrder)
+                .WithMany()
+                .HasForeignKey(r => r.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(r => r.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasMany(r => r.Lines)
+                .WithOne(l => l.GoodsReceipt)
+                .HasForeignKey(l => l.GoodsReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    private static void ConfigureGoodsReceiptLines(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<GoodsReceiptLine>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+
+            entity.Property(l => l.Quantity)
+                .HasPrecision(18, 3);
+
+            entity.Property(l => l.UnitCost)
+                .HasPrecision(18, 2);
+
+            entity.HasOne(l => l.PurchaseOrderLine)
+                .WithMany()
+                .HasForeignKey(l => l.PurchaseOrderLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(l => new
+            {
+                l.GoodsReceiptId,
+                l.PurchaseOrderLineId
+            })
+            .IsUnique();
+
+            entity.ToTable("GoodsReceiptLines", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_GoodsReceiptLines_Quantity",
+                    "`Quantity` > 0");
+
+                table.HasCheckConstraint(
+                    "CK_GoodsReceiptLines_UnitCost",
+                    "`UnitCost` >= 0");
             });
         });
     }

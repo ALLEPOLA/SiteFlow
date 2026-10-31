@@ -28,6 +28,12 @@ public class PurchaseOrderResponse
 
     public DateTime CreatedAtUtc { get; set; }
 
+    public string? IssuedByName { get; set; }
+
+    public DateTime? IssuedAtUtc { get; set; }
+
+    public bool CanIssue { get; set; }
+
     public decimal TotalAmount { get; set; }
 
     public List<PurchaseOrderLineResponse> Lines { get; set; } = new();
