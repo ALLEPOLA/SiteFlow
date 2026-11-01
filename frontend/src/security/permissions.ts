@@ -1,4 +1,4 @@
-// Navigation describes assigned duties. API write checks and project filters remain authoritative.
+
 export type WorkspacePage = "dashboard" | "projects" | "costs" | "materials" | "suppliers" | "planning" | "requests" | "orders" | "receipts" | "inventory" | "issues" | "corrections" | "stock-operations" | "accounts" | "documents" | "notifications" | "reports" | "audit" | "users" | "profile" | "reservations" | "stores"
 export const rolePages: Readonly<Record<string, readonly WorkspacePage[]>> = {
   "Administrator": [
