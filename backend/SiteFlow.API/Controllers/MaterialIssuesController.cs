@@ -1,3 +1,4 @@
+using SiteFlow.API.Services;
 using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -279,6 +280,28 @@ public class MaterialIssuesController : ControllerBase
                 item => item.MaterialId,
                 cancellationToken);
 
+        // Project lock serializes holds, normal issues, and reserved fulfillment.
+        var reservationIds = dto.Lines.Where(l => l.ReservationId.HasValue).Select(l => l.ReservationId!.Value).ToArray();
+        var reservations = await _context.MaterialReservations.Where(r => reservationIds.Contains(r.Id)).ToDictionaryAsync(r => r.Id, cancellationToken);
+        foreach (var input in dto.Lines)
+        {
+            var held = await ReservationRules.Held(_context, dto.ProjectId, input.MaterialId, cancellationToken);
+            var onHand = stock.TryGetValue(input.MaterialId, out var balance) ? balance.QuantityOnHand : 0;
+            if (input.ReservationId is int reservationId)
+            {
+                if (!reservations.TryGetValue(reservationId, out var hold) || hold.ProjectId != dto.ProjectId ||
+                    hold.MaterialId != input.MaterialId || input.Quantity > ReservationRules.Remaining(hold.Quantity, hold.ConsumedQuantity, hold.ReleasedQuantity))
+                    return Conflict(new { message = "Reservation does not match this project/material or its remaining quantity is insufficient." });
+                if (dto.IssueDate < DateOnly.FromDateTime(hold.CreatedAtUtc))
+                    return BadRequest(new { message = "A reserved issue cannot predate the reservation." });
+                if (!ReservationRules.CanReduceTo(onHand - input.Quantity, held - input.Quantity))
+                    return Conflict(new { message = "Reserved stock is no longer physically available." });
+                hold.ConsumedQuantity += input.Quantity;
+            }
+            else if (!ReservationRules.CanReduceTo(onHand - input.Quantity, held))
+                return Conflict(new { message = "This quantity is reserved for approved work. Select the matching reservation or reduce the unreserved issue." });
+        }
+
         foreach (var line in dto.Lines)
         {
             var material = materials[line.MaterialId];
@@ -347,6 +370,7 @@ public class MaterialIssuesController : ControllerBase
                 return new MaterialIssueLine
                 {
                     MaterialId = line.MaterialId,
+                    ReservationId = line.ReservationId,
                     Quantity = line.Quantity,
                     UnitCost = unitCost
                 };
@@ -436,7 +460,7 @@ public class MaterialIssuesController : ControllerBase
             existing.Lines.All(saved =>
                 dto.Lines.Any(incoming =>
                     incoming.MaterialId == saved.MaterialId &&
-                    incoming.Quantity == saved.Quantity));
+                    incoming.Quantity == saved.Quantity && incoming.ReservationId == saved.ReservationId));
 
         if (!sameHeader || !sameLines)
         {
@@ -458,6 +482,7 @@ public class MaterialIssuesController : ControllerBase
             .Select(line => new MaterialIssueLineResponse
             {
                 Id = line.Id,
+                ReservationId = line.ReservationId,
                 MaterialId = line.MaterialId,
                 MaterialCode = line.Material.Code,
                 MaterialName = line.Material.Name,

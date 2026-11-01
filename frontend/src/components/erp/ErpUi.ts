@@ -11,7 +11,7 @@ export const send = <T,>(url: string, body: unknown, method = 'POST') => apiFetc
   method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 }).then(readApiResponse<T>)
 
-export function useData<T>(url: string) {
+export function useData<T>(url: string, enabled = true) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -32,7 +32,7 @@ export function useData<T>(url: string) {
     }
     void load()
     return () => controller.abort()
-  }, [url, version])
+  }, [url, version, enabled])
   return { data, error, loading, refresh: () => setVersion(v => v + 1) }
 }
 

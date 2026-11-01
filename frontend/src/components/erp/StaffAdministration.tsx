@@ -1,3 +1,4 @@
+import PasswordInput from '../ui/PasswordInput'
 import { useState } from 'react'
 import { send, useCommand, useData } from './ErpUi'
 import { Feedback } from './Feedback'
@@ -47,8 +48,8 @@ export default function StaffAdministration() {
       <h3>Reset temporary password</h3>
       <form onSubmit={async e => { e.preventDefault(); if (await command.run(async () => { if (password !== confirm) throw new Error('Passwords must match.'); return send(`/api/users/${selected.id}/reset-password`, { password, reason }) })) { setPassword(''); setConfirm(''); staff.refresh() } }}>
         <fieldset className="form-fields" disabled={command.busy}><div className="form-grid">
-          <label>Temporary password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
-          <label>Confirm temporary password<input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
+          <PasswordInput label="Temporary password" value={password} onChange={e => setPassword(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required  />
+          <PasswordInput label="Confirm temporary password" value={confirm} onChange={e => setConfirm(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required  />
           <label>Reset reason<input value={reason} onChange={e => setReason(e.target.value)} maxLength={1000} required /></label>
         </div><p>Use uppercase, lowercase, a number, and a symbol. Previous sessions end and the user must choose a new password.</p><button className="secondary-button">Reset password</button></fieldset>
       </form>

@@ -1,0 +1,97 @@
+// Navigation describes assigned duties. API write checks and project filters remain authoritative.
+export type WorkspacePage = "dashboard" | "projects" | "costs" | "materials" | "suppliers" | "planning" | "requests" | "orders" | "receipts" | "inventory" | "issues" | "corrections" | "stock-operations" | "accounts" | "documents" | "notifications" | "reports" | "audit" | "users" | "profile" | "reservations"
+export const rolePages: Readonly<Record<string, readonly WorkspacePage[]>> = {
+  "Administrator": [
+    "dashboard",
+    "projects",
+    "costs",
+    "materials",
+    "suppliers",
+    "planning",
+    "requests",
+    "orders",
+    "receipts",
+    "inventory",
+    "reservations",
+    "issues",
+    "corrections",
+    "stock-operations",
+    "accounts",
+    "documents",
+    "notifications",
+    "reports",
+    "audit",
+    "users",
+    "profile"
+  ],
+  "SiteEngineer": [
+    "dashboard",
+    "projects",
+    "materials",
+    "planning",
+    "requests",
+    "inventory",
+    "reservations",
+    "corrections",
+    "documents",
+    "notifications",
+    "reports",
+    "profile"
+  ],
+  "ProjectManager": [
+    "dashboard",
+    "projects",
+    "costs",
+    "materials",
+    "suppliers",
+    "planning",
+    "requests",
+    "orders",
+    "receipts",
+    "inventory",
+    "reservations",
+    "issues",
+    "documents",
+    "notifications",
+    "reports",
+    "profile"
+  ],
+  "ProcurementOfficer": [
+    "dashboard",
+    "projects",
+    "costs",
+    "materials",
+    "suppliers",
+    "planning",
+    "requests",
+    "orders",
+    "receipts",
+    "inventory",
+    "reservations",
+    "corrections",
+    "accounts",
+    "documents",
+    "notifications",
+    "reports",
+    "profile"
+  ],
+  "Storekeeper": [
+    "dashboard",
+    "projects",
+    "materials",
+    "orders",
+    "receipts",
+    "inventory",
+    "reservations",
+    "issues",
+    "corrections",
+    "stock-operations",
+    "documents",
+    "notifications",
+    "reports",
+    "profile"
+  ]
+}
+export function canAccessPage(roles: readonly string[], page: WorkspacePage): boolean {
+  return roles.some(role => rolePages[role]?.includes(page) === true)
+}

@@ -1,3 +1,4 @@
+import PasswordInput from './ui/PasswordInput'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { AuthUser } from '../types/auth'
@@ -127,18 +128,14 @@ export default function LoginPage({ onLoggedIn }: Props) {
                 />
               </label>
 
-              <label htmlFor="login-password">
-                Password
-                <input
+              <PasswordInput label="Password"
                   id="login-password"
-                  type="password"
                   autoComplete="current-password"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   required
-                />
-              </label>
+                 />
 
               <button className="primary-button" type="submit">
                 {loading ? <><span className="loading-spinner" aria-hidden="true" />Signing in...</> : <>Sign in to your workspace<Icon name="arrow" /></>}

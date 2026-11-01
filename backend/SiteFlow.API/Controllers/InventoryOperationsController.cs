@@ -69,7 +69,7 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
         var stock = await OperationRules.Stock(db, dto.ProjectId, dto.MaterialId);
         if (dto.Date < stock.Latest) return BadRequest(new { message = "Date cannot precede the latest stock movement." });
         var change = dto.Kind == "Count" ? dto.Quantity - stock.Quantity : dto.Kind is "Transfer" or "SupplierReturn" ? -dto.Quantity : dto.Quantity;
-        if (stock.Quantity + change < 0) return Conflict(new { message = "Insufficient stock for this operation." });
+        if (!ReservationRules.CanReduceTo(stock.Quantity + change, await ReservationRules.Held(db, dto.ProjectId, dto.MaterialId))) return Conflict(new { message = "Insufficient unreserved stock. Release reservations before reducing stock below the reserved quantity." });
         var cost = change < 0 || (dto.Kind == "Count" && stock.Quantity > 0) ? stock.Cost : dto.UnitCost;
         if (receiptLine is not null)
         {
@@ -131,7 +131,7 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
         foreach (var movement in movements)
         {
             var stock = await OperationRules.Stock(db, movement.ProjectId, movement.MaterialId);
-            if (stock.Quantity - movement.Quantity < 0) return Conflict(new { message = "Reversal would create negative stock. Reverse dependent activity first." });
+            if (!ReservationRules.CanReduceTo(stock.Quantity - movement.Quantity, await ReservationRules.Held(db, movement.ProjectId, movement.MaterialId))) return Conflict(new { message = "Reversal would consume reserved stock or create negative stock. Release holds or reverse dependent activity first." });
             if (movement.Quantity > 0 && await db.StockMovements.AnyAsync(m => m.ProjectId == movement.ProjectId && m.MaterialId == movement.MaterialId && m.Id > movement.Id &&
                 m.ReversesMovementId == null && !db.StockMovements.Any(r => r.ReversesMovementId == m.Id)))
                 return Conflict(new { message = "Reverse later stock activity first to preserve valuation." });

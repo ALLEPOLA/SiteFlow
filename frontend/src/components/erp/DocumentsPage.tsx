@@ -1,3 +1,5 @@
+import { canAccessPage } from '../../security/permissions'
+import type { WorkspacePage } from '../../security/permissions'
 import Icon from '../ui/Icon'
 import { useRef, useState } from 'react'
 import type { AuthUser } from '../../types/auth'
@@ -30,13 +32,14 @@ export default function DocumentsPage({ user }: { user: AuthUser }) {
   const command = useCommand()
   const input = useRef<HTMLInputElement>(null)
   const urls: Record<string, string> = { Project: '/api/projects', Request: '/api/material-requests', Order: '/api/purchase-orders', Receipt: '/api/goods-receipts', Issue: '/api/material-issues', Invoice: '/api/supplier-accounts' }
+  const resourcePages: Record<string, WorkspacePage> = { Project: 'projects', Request: 'requests', Order: 'orders', Receipt: 'receipts', Issue: 'issues', Invoice: 'accounts' }
   const resources = useData<Resource[]>(urls[type])
   return <>
     <header className="page-header">
         <span className="workspace-page-emblem" aria-hidden="true"><Icon name="documents" /></span><h1>Documents</h1><p>Attach quotations, delivery notes, invoices, and site photos to project records.</p></header>
     <Feedback error={command.error || resources.error} message={command.message} />
     <section className="panel"><div className="form-grid">
-      <label>Record type<select value={type} onChange={e => { setType(e.target.value); setId('') }} disabled={command.busy}>{Object.keys(urls).filter(t => t !== 'Invoice' || user.roles.some(r => ['Administrator', 'ProcurementOfficer'].includes(r))).map(t => <option key={t}>{t}</option>)}</select></label>
+      <label>Record type<select value={type} onChange={e => { setType(e.target.value); setId('') }} disabled={command.busy}>{Object.keys(urls).filter(t => canAccessPage(user.roles, resourcePages[t])).map(t => <option key={t}>{t}</option>)}</select></label>
       <label>Record<select value={id} onChange={e => setId(e.target.value)} disabled={resources.loading || command.busy}><option value="">Select record</option>{!resources.loading && resources.data?.map(r => <option key={r.id} value={r.id}>{type === 'Order' ? r.orderNumber : r.requestNumber ?? r.receiptNumber ?? r.issueNumber ?? r.number ?? `${r.code} — ${r.name}`}</option>)}</select></label>
     </div></section>
     {id && <section className="panel"><h2>Attachments</h2><form onSubmit={async e => { e.preventDefault()

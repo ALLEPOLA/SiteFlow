@@ -1,3 +1,4 @@
+import PasswordInput from './ui/PasswordInput'
 import Icon from './ui/Icon'
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -216,10 +217,7 @@ export default function UserManagementPage() {
                 </small>
               </label>
 
-              <label>
-                Password
-                <input
-                  type="password"
+              <PasswordInput label="Password"
                   value={password}
                   onChange={event => setPassword(event.target.value)}
                   minLength={12}
@@ -227,13 +225,9 @@ export default function UserManagementPage() {
                   autoComplete="new-password"
                   aria-describedby="user-password-help"
                   required
-                />
-              </label>
+                 />
 
-              <label>
-                Confirm password
-                <input
-                  type="password"
+              <PasswordInput label="Confirm password"
                   value={confirmPassword}
                   onChange={event =>
                     setConfirmPassword(event.target.value)
@@ -242,8 +236,7 @@ export default function UserManagementPage() {
                   maxLength={128}
                   autoComplete="new-password"
                   required
-                />
-              </label>
+                 />
             </div>
 
             <p id="user-password-help">

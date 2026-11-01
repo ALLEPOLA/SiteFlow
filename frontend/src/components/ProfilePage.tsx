@@ -1,3 +1,4 @@
+import PasswordInput from './ui/PasswordInput'
 import Icon from './ui/Icon'
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -203,12 +204,9 @@ export default function ProfilePage({
 
         <form onSubmit={changePassword}>
           <fieldset className="profile-fields" disabled={busy}>
-            <label>
-              {user.mustChangePassword
+            <PasswordInput label={user.mustChangePassword
                 ? 'Temporary password'
                 : 'Current password'}
-              <input
-                type="password"
                 value={currentPassword}
                 onChange={event =>
                   setCurrentPassword(event.target.value)
@@ -216,26 +214,18 @@ export default function ProfilePage({
                 autoComplete="current-password"
                 maxLength={1024}
                 required
-              />
-            </label>
+               />
 
-            <label>
-              New password
-              <input
-                type="password"
+            <PasswordInput label="New password"
                 value={newPassword}
                 onChange={event => setNewPassword(event.target.value)}
                 autoComplete="new-password"
                 minLength={12}
                 maxLength={128}
                 required
-              />
-            </label>
+               />
 
-            <label>
-              Confirm new password
-              <input
-                type="password"
+            <PasswordInput label="Confirm new password"
                 value={confirmPassword}
                 onChange={event =>
                   setConfirmPassword(event.target.value)
@@ -244,8 +234,7 @@ export default function ProfilePage({
                 minLength={12}
                 maxLength={128}
                 required
-              />
-            </label>
+               />
 
             <p>
               Use at least 12 characters, including uppercase,

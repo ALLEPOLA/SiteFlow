@@ -105,6 +105,7 @@ builder.Services.AddAntiforgery(options =>
 builder.Services.AddScoped<RequiredPasswordChangeFilter>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<OperationAuditFilter>();
+builder.Services.AddScoped<WorkspacePermissionFilter>();
 
 builder.Services.AddControllersWithViews(options =>
 {
@@ -112,6 +113,7 @@ builder.Services.AddControllersWithViews(options =>
         new AutoValidateAntiforgeryTokenAttribute());
 
     options.Filters.AddService<RequiredPasswordChangeFilter>();
+    options.Filters.AddService<WorkspacePermissionFilter>();
     options.Filters.AddService<OperationAuditFilter>();
     options.Filters.Add<DatabaseConflictFilter>();
 });

@@ -1,3 +1,4 @@
+using SiteFlow.API.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,11 +12,11 @@ public class DocumentsController(AppDbContext db) : ControllerBase
 {
     private async Task<int?> Project(string type, int id) => type switch
     {
-        "Project" => await db.Projects.Where(p => p.Id == id).Select(p => (int?)p.Id).SingleOrDefaultAsync(),
-        "Request" => await db.MaterialRequests.Where(r => r.Id == id).Select(r => (int?)r.ProjectId).SingleOrDefaultAsync(),
-        "Order" => await db.PurchaseOrders.Where(o => o.Id == id).Select(o => (int?)o.MaterialRequest.ProjectId).SingleOrDefaultAsync(),
-        "Receipt" => await db.GoodsReceipts.Where(r => r.Id == id).Select(r => (int?)r.PurchaseOrder.MaterialRequest.ProjectId).SingleOrDefaultAsync(),
-        "Issue" => await db.MaterialIssues.Where(i => i.Id == id).Select(i => (int?)i.ProjectId).SingleOrDefaultAsync(),
+        "Project" when WorkspacePermissions.CanAccess(User, "projects") => await db.Projects.Where(p => p.Id == id).Select(p => (int?)p.Id).SingleOrDefaultAsync(),
+        "Request" when WorkspacePermissions.CanAccess(User, "requests") => await db.MaterialRequests.Where(r => r.Id == id).Select(r => (int?)r.ProjectId).SingleOrDefaultAsync(),
+        "Order" when WorkspacePermissions.CanAccess(User, "orders") => await db.PurchaseOrders.Where(o => o.Id == id).Select(o => (int?)o.MaterialRequest.ProjectId).SingleOrDefaultAsync(),
+        "Receipt" when WorkspacePermissions.CanAccess(User, "receipts") => await db.GoodsReceipts.Where(r => r.Id == id).Select(r => (int?)r.PurchaseOrder.MaterialRequest.ProjectId).SingleOrDefaultAsync(),
+        "Issue" when WorkspacePermissions.CanAccess(User, "issues") => await db.MaterialIssues.Where(i => i.Id == id).Select(i => (int?)i.ProjectId).SingleOrDefaultAsync(),
         "Invoice" when User.IsInRole("Administrator") || User.IsInRole("ProcurementOfficer") => await db.SupplierInvoices.Where(i => i.Id == id).Select(i => (int?)i.PurchaseOrder.MaterialRequest.ProjectId).SingleOrDefaultAsync(),
         _ => null
     };
@@ -63,7 +64,7 @@ public class DocumentsController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Download(int id)
     {
         var attachment = await db.DocumentAttachments.SingleOrDefaultAsync(a => a.Id == id);
-        if (attachment is null) return NotFound();
+        if (attachment is null || await Project(attachment.ResourceType, attachment.ResourceId) is null) return NotFound();
         Response.Headers["X-Content-Type-Options"] = "nosniff";
         Response.Headers["Cache-Control"] = "no-store";
         return File(attachment.Content, attachment.ContentType, attachment.FileName);

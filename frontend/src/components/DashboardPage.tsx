@@ -1,3 +1,5 @@
+import type { AuthUser } from '../types/auth'
+import { canAccessPage } from '../security/permissions'
 import { useEffect, useState } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
 import Icon from './ui/Icon'
@@ -10,18 +12,20 @@ type DashboardDestination =
   | 'receipts'
   | 'inventory'
   | 'issues'
+  | 'reservations'
 
 type DashboardData = {
   generatedAtUtc: string
 
   summary: {
-    activeProjects: number
-    pendingRequests: number
-    requestsAwaitingPurchase: number
-    draftPurchaseOrders: number
-    ordersAwaitingDelivery: number
-    postedReceipts: number
-    postedMaterialIssues: number
+    activeProjects: number | null
+    activeReservations: number
+    pendingRequests: number | null
+    requestsAwaitingPurchase: number | null
+    draftPurchaseOrders: number | null
+    ordersAwaitingDelivery: number | null
+    postedReceipts: number | null
+    postedMaterialIssues: number | null
   }
 
   recentReceipts: {
@@ -65,6 +69,7 @@ type DashboardData = {
 }
 
 type Props = {
+  user: AuthUser
   onNavigate: (page: DashboardDestination) => void
 }
 
@@ -72,11 +77,35 @@ function reference(prefix: string, id: number) {
   return `${prefix}-${String(id).padStart(6, '0')}`
 }
 
-export default function DashboardPage({ onNavigate }: Props) {
+export default function DashboardPage({ onNavigate, user }: Props) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
+
+  const can = (page: DashboardDestination) => canAccessPage(user.roles, page)
+  const reviewer = user.roles.some(role => ['Administrator', 'ProjectManager'].includes(role))
+  const engineer = user.roles.includes('SiteEngineer')
+  const purchaser = user.roles.some(role => ['Administrator', 'ProcurementOfficer'].includes(role))
+  const primary: DashboardDestination = reviewer || engineer ? 'requests' : purchaser ? 'orders' : 'inventory'
+  const primaryLabel = primary === 'requests' ? reviewer ? 'Review material requests' : 'Open my material requests' : primary === 'orders' ? 'Manage purchase orders' : 'Explore your inventory'
+  const metrics: { key: keyof DashboardData['summary']; label: string; page: DashboardDestination; icon: string; show: boolean }[] = [
+    { key: 'activeReservations', label: 'Active material reservations', page: 'reservations', icon: 'reservations', show: can('reservations') },
+    { key: 'activeProjects', label: 'Active assigned projects', page: 'projects', icon: 'projects', show: can('projects') },
+    { key: 'pendingRequests', label: reviewer ? 'Requests I can review' : 'My submitted requests', page: 'requests', icon: 'requests', show: reviewer || engineer },
+    { key: 'requestsAwaitingPurchase', label: 'Approved requests to order', page: 'orders', icon: 'orders', show: purchaser },
+    { key: 'draftPurchaseOrders', label: 'Draft purchase orders', page: 'orders', icon: 'orders', show: purchaser },
+    { key: 'ordersAwaitingDelivery', label: 'Orders awaiting delivery', page: 'receipts', icon: 'receipts', show: can('receipts') },
+    { key: 'postedReceipts', label: 'Posted goods receipts', page: 'receipts', icon: 'inventory', show: can('receipts') },
+    { key: 'postedMaterialIssues', label: 'Posted material issues', page: 'issues', icon: 'issues', show: can('issues') },
+  ]
+  const shortcuts: { page: DashboardDestination; label: string; hint: string }[] = [
+    { page: 'requests', label: reviewer ? 'Review requests' : 'Material requests', hint: reviewer ? 'Review requests from other creators' : 'Plan the next site requirement' },
+    { page: 'orders', label: 'Purchase orders', hint: purchaser ? 'Keep procurement moving' : 'View assigned project orders' },
+    { page: 'receipts', label: 'Goods receipts', hint: 'Review incoming materials' },
+    { page: 'inventory', label: 'Site inventory', hint: 'Trace stock and movements' },
+    { page: 'issues', label: 'Material issues', hint: 'Track materials issued to the site' },
+  ]
 
   useEffect(() => {
     const controller = new AbortController()
@@ -121,19 +150,16 @@ export default function DashboardPage({ onNavigate }: Props) {
       <header className="page-header dashboard-heading">
         <p className="eyebrow">OPERATIONS OVERVIEW</p>
         <h1>Your operations, at a glance<span className="text-teal-600">.</span></h1>
-        <p>Construction and materials activity for your accessible projects.</p>
+        <p>Your assigned workspaces and project activity, based on your current role permissions.</p>
       </header>
 
       <section className="dashboard-hero">
-        <div className="relative z-10"><span className="hero-label"><span />CONNECTED MATERIALS MANAGEMENT</span><h2>Keep every site<br /><span>moving forward.</span></h2><p>From the first request to the final issue.<br className="hidden sm:block" /> Everything you need to keep materials flowing.</p><button type="button" className="hero-action" onClick={() => onNavigate('inventory')}>Explore your inventory<Icon name="arrow" /></button></div>
+        <div className="relative z-10"><span className="hero-label"><span />CONNECTED MATERIALS MANAGEMENT</span><h2>Keep every site<br /><span>moving forward.</span></h2><p>From the first request to the final issue.<br className="hidden sm:block" /> Everything you need to keep materials flowing.</p><button type="button" className="hero-action" onClick={() => onNavigate(primary)}>{primaryLabel}<Icon name="arrow" /></button></div>
         <div className="dashboard-hero-visual"><ConstructionAnimation /><div className="hero-flow" aria-label="Materials workflow"><div><span className="hero-flow-icon"><Icon name="requests" /></span><span>01</span><strong>Request</strong></div><i /><div><span className="hero-flow-icon"><Icon name="orders" /></span><span>02</span><strong>Purchase</strong></div><i /><div><span className="hero-flow-icon"><Icon name="inventory" /></span><span>03</span><strong>Receive & track</strong></div></div>
       </div></section>
 
-      <nav className="dashboard-shortcuts" aria-label="Dashboard quick access">
-        <button type="button" onClick={() => onNavigate('requests')}><span><Icon name="requests" /></span><div><strong>Material requests</strong><small>Plan the next site requirement</small></div><Icon name="arrow" /></button>
-        <button type="button" onClick={() => onNavigate('orders')}><span><Icon name="orders" /></span><div><strong>Purchase orders</strong><small>Keep procurement moving</small></div><Icon name="arrow" /></button>
-        <button type="button" onClick={() => onNavigate('receipts')}><span><Icon name="receipts" /></span><div><strong>Goods receipts</strong><small>Review incoming materials</small></div><Icon name="arrow" /></button>
-        <button type="button" onClick={() => onNavigate('inventory')}><span><Icon name="inventory" /></span><div><strong>Site inventory</strong><small>Trace stock and movements</small></div><Icon name="arrow" /></button>
+      <nav className="dashboard-shortcuts" aria-label="Your role's quick access">
+        {shortcuts.filter(item => can(item.page)).map(item => <button key={item.page} type="button" onClick={() => onNavigate(item.page)}><span><Icon name={item.page} /></span><div><strong>{item.label}</strong><small>{item.hint}</small></div><Icon name="arrow" /></button>)}
       </nav>
       <div className="section-toolbar dashboard-toolbar">
         <p>
@@ -161,90 +187,15 @@ export default function DashboardPage({ onNavigate }: Props) {
       )}
 
       {loading ? (
-        <div role="status" aria-label="Loading summary and recent activity"><div className="dashboard-cards skeleton-grid" aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <div className="skeleton-card" key={index}><span /><strong /><small /></div>)}</div><span className="sr-only">Loading summary and recent activity...</span></div>
+        <div role="status" aria-label="Loading summary and recent activity"><div className="dashboard-cards skeleton-grid" aria-hidden="true">{Array.from({ length: metrics.filter(item => item.show).length }, (_, index) => <div className="skeleton-card" key={index}><span /><strong /><small /></div>)}</div><span className="sr-only">Loading summary and recent activity...</span></div>
       ) : !error && data ? (
         <>
           <div className="dashboard-cards">
-            <button
-              type="button"
-              className="dashboard-card"
-              onClick={() => onNavigate('projects')}
-            >
-              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="projects" /></span>
-              <span>Active projects</span>
-              <strong>{data.summary.activeProjects}</strong>
-              <small>View projects</small>
-            </button>
-
-            <button
-              type="button"
-              className="dashboard-card"
-              onClick={() => onNavigate('requests')}
-            >
-              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="requests" /></span>
-              <span>Requests awaiting review</span>
-              <strong>{data.summary.pendingRequests}</strong>
-              <small>View material requests</small>
-            </button>
-
-            <button
-              type="button"
-              className="dashboard-card"
-              onClick={() => onNavigate('orders')}
-            >
-              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="orders" /></span>
-              <span>Approved requests to order</span>
-              <strong>{data.summary.requestsAwaitingPurchase}</strong>
-              <small>View purchase orders</small>
-            </button>
-
-            <button
-              type="button"
-              className="dashboard-card"
-              onClick={() => onNavigate('orders')}
-            >
-              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="orders" /></span>
-              <span>Draft purchase orders</span>
-              <strong>{data.summary.draftPurchaseOrders}</strong>
-              <small>View purchase orders</small>
-            </button>
-
-            <button
-              type="button"
-              className="dashboard-card"
-              onClick={() => onNavigate('receipts')}
-            >
-              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="receipts" /></span>
-              <span>Orders awaiting delivery</span>
-              <strong>{data.summary.ordersAwaitingDelivery}</strong>
-              <small>View goods receipts</small>
-            </button>
-
-            <button
-              type="button"
-              className="dashboard-card"
-              onClick={() => onNavigate('receipts')}
-            >
-              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="inventory" /></span>
-              <span>Posted goods receipts</span>
-              <strong>{data.summary.postedReceipts}</strong>
-              <small>View deliveries</small>
-            </button>
-
-            <button
-              type="button"
-              className="dashboard-card"
-              onClick={() => onNavigate('issues')}
-            >
-              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="issues" /></span>
-              <span>Posted material issues</span>
-              <strong>{data.summary.postedMaterialIssues}</strong>
-              <small>View material issues</small>
-            </button>
+            {metrics.filter(item => item.show).map(item => <button key={item.key} type="button" className="dashboard-card" onClick={() => onNavigate(item.page)}><span className="dashboard-metric-icon" aria-hidden="true"><Icon name={item.icon} /></span><span>{item.label}</span><strong>{data.summary[item.key] ?? 0}</strong><small>Open workspace</small></button>)}
           </div>
 
           <div className="dashboard-activity">
-          <section className="panel">
+          {reviewer && (<section className="panel">
             <div className="section-toolbar">
               <h2>Requests awaiting review</h2>
               <button
@@ -282,9 +233,9 @@ export default function DashboardPage({ onNavigate }: Props) {
                 </table>
               </div>
             )}
-          </section>
+          </section>)}
 
-          <section className="panel">
+          {can('orders') && can('receipts') && (<section className="panel">
             <div className="section-toolbar">
               <h2>Outstanding deliveries</h2>
               <button
@@ -330,9 +281,9 @@ export default function DashboardPage({ onNavigate }: Props) {
                 </table>
               </div>
             )}
-          </section>
+          </section>)}
 
-          <section className="panel">
+          {can('receipts') && (<section className="panel">
             <div className="section-toolbar">
               <h2>Recent goods receipts</h2>
               <button
@@ -376,9 +327,9 @@ export default function DashboardPage({ onNavigate }: Props) {
                 </table>
               </div>
             )}
-          </section>
+          </section>)}
 
-          <section className="panel">
+          {can('issues') && (<section className="panel">
             <div className="section-toolbar">
               <h2>Recent material issues</h2>
               <button
@@ -418,9 +369,9 @@ export default function DashboardPage({ onNavigate }: Props) {
                 </table>
               </div>
             )}
-          </section>
+          </section>)}
 
-          <section className="panel">
+          {can('inventory') && (<section className="panel">
             <div className="section-toolbar">
               <h2>Project stock</h2>
               <button
@@ -435,7 +386,7 @@ export default function DashboardPage({ onNavigate }: Props) {
               Check available quantities and trace receipts and issues
               for each project.
             </p>
-          </section>
+          </section>)}
           </div>
         </>
       ) : null}

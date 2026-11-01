@@ -67,3 +67,19 @@
   .workspace-page-emblem, .workspace-content .page-header::before, .workspace-content .page-header::after { display: none; }
   .workspace-content .panel { background: white; box-shadow: none; }
 }
+
+/* Material requirements planning */
+.planning-intro { display: flex; gap: 16px; align-items: center; margin-bottom: 24px; padding: 20px; border: 1px solid #d7e4c8; border-radius: 16px; background: linear-gradient(110deg,#e8f1dc,#f9fbf5); }
+.planning-intro > .ui-icon { width: 32px; height: 32px; color: #60884d; }
+.planning-intro strong { color: #31563d; }
+.planning-intro p { margin: 5px 0 0; font-size: 12px; color: #65785b; }
+.planning-input-grid { grid-template-columns: repeat(auto-fit,minmax(min(100%,180px),1fr)); margin-bottom: 0; }
+.planning-coverage { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.planning-coverage progress { width: 90px; height: 6px; accent-color: #5d8d4d; border-radius: 6px; }
+.planning-warning { margin: 16px 0; padding: 14px 16px; border: 1px solid #e8d7b5; border-left: 3px solid #bf9551; background: #fff8e9; border-radius: 9px; color: #805e31; font-size: 12px; }
+.planning-warning p { margin: 8px 0 0; }
+.planning-late { display: block; margin-top: 5px; color: #a45f43; }
+.planning-note { margin-top: 16px; color: #77856d; font-size: 11px; }
+.planning-assumptions { padding-left: 20px; list-style: disc; color: #63745a; font-size: 12px; display: grid; gap: 10px; }
+@media(max-width:767px) { .planning-intro { align-items: flex-start; padding: 16px; } .planning-coverage { flex-wrap: wrap; } }
+

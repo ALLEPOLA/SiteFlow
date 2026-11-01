@@ -1,3 +1,6 @@
+import MaterialReservationsPage from './components/erp/MaterialReservationsPage'
+import { canAccessPage } from './security/permissions'
+import type { WorkspacePage } from './security/permissions'
 import { useEffect, useState } from 'react'
 import DashboardPage from './components/DashboardPage'
 import ProjectsPage from './components/ProjectsPage'
@@ -19,32 +22,14 @@ import DocumentsPage from './components/erp/DocumentsPage'
 import NotificationsPage from './components/erp/NotificationsPage'
 import ReportsPage from './components/erp/ReportsPage'
 import AuditPage from './components/erp/AuditPage'
+import MaterialPlanningPage from './components/erp/MaterialPlanningPage'
 import Icon from './components/ui/Icon'
 import Brand from './components/ui/Brand'
 import type { AuthUser } from './types/auth'
 import { apiFetch, readApiResponse } from './api/apiFetch'
 import './App.css'
 
-type Page =
-  | 'dashboard'
-  | 'projects'
-  | 'costs'
-  | 'materials'
-  | 'suppliers'
-  | 'requests'
-  | 'orders'
-  | 'receipts'
-  | 'inventory'
-  | 'issues'
-  | 'users'
-  | 'profile'
-  | 'corrections'
-  | 'stock-operations'
-  | 'accounts'
-  | 'documents'
-  | 'notifications'
-  | 'reports'
-  | 'audit'
+type Page = WorkspacePage
 
 const navigation: {
   page: Page
@@ -57,10 +42,12 @@ const navigation: {
   { page: 'costs', label: 'Project Costs' },
   { page: 'materials', label: 'Materials' },
   { page: 'suppliers', label: 'Suppliers' },
+  { page: 'planning', label: 'Material Planning' },
   { page: 'requests', label: 'Material Requests' },
   { page: 'orders', label: 'Purchase Orders' },
   { page: 'receipts', label: 'Goods Receipts' },
   { page: 'inventory', label: 'Inventory' },
+  { page: 'reservations', label: 'Reservations' },
   { page: 'issues', label: 'Material Issues' },
   { page: 'corrections', label: 'Corrections' },
   { page: 'stock-operations', label: 'Stock Operations', roles: ['Administrator', 'Storekeeper'] },
@@ -235,13 +222,13 @@ function App() {
   const isAdmin = user.roles.includes('Administrator')
 
   const visibleNavigation = navigation.filter(
-    item => (!item.adminOnly || isAdmin) && (!item.roles || item.roles.some(role => user.roles.includes(role))),
+    item => canAccessPage(user.roles, item.page),
   )
 
   const groups = [
     { label: 'Workspace', pages: ['dashboard', 'projects', 'costs'] },
-    { label: 'Materials & purchasing', pages: ['materials', 'suppliers', 'requests', 'orders', 'receipts'] },
-    { label: 'Stock & finance', pages: ['inventory', 'issues', 'stock-operations', 'accounts', 'corrections'] },
+    { label: 'Materials & purchasing', pages: ['materials', 'suppliers', 'planning', 'requests', 'orders', 'receipts'] },
+    { label: 'Stock & finance', pages: ['inventory', 'reservations', 'issues', 'stock-operations', 'accounts', 'corrections'] },
     { label: 'Tools & administration', pages: ['documents', 'notifications', 'reports', 'audit', 'users', 'profile'] },
   ]
   const currentLabel = user.mustChangePassword ? 'My Profile' : navigation.find(item => item.page === page)?.label
@@ -300,9 +287,11 @@ function App() {
       ) : (
         <>
           <div key={page} className="page-transition">
+          {canAccessPage(user.roles, page) ? <>
           {page === 'dashboard' && (
             <DashboardPage
-              onNavigate={destination => setPage(destination)}
+              user={user}
+              onNavigate={destination => { if (canAccessPage(user.roles, destination)) setPage(destination) }}
             />
           )}
 
@@ -310,10 +299,12 @@ function App() {
           {page === 'costs' && <ProjectCostsPage />}
           {page === 'materials' && <MaterialsPage />}
           {page === 'suppliers' && <SuppliersPage />}
+          {page === 'planning' && <MaterialPlanningPage user={user} />}
           {page === 'requests' && <MaterialRequestsPage />}
           {page === 'orders' && <PurchaseOrdersPage />}
           {page === 'receipts' && <GoodsReceiptsPage />}
           {page === 'inventory' && <InventoryPage />}
+          {page === 'reservations' && <MaterialReservationsPage user={user} />}
           {page === 'issues' && <MaterialIssuesPage />}
           {page === 'corrections' && <CorrectionsPage user={user} />}
           {page === 'stock-operations' && user.roles.some(role => ['Administrator', 'Storekeeper'].includes(role)) && <StockOperationsPage />}
@@ -323,7 +314,7 @@ function App() {
             const item = visibleNavigation.find(entry => entry.page === destination)
             if (item) setPage(item.page)
           }} />}
-          {page === 'reports' && <ReportsPage />}
+          {page === 'reports' && <ReportsPage user={user} />}
           {page === 'audit' && isAdmin && <AuditPage />}
           {page === 'users' && isAdmin && <UserManagementPage />}
 
@@ -334,6 +325,7 @@ function App() {
               onSignedOut={endSession}
             />
           )}
+          </> : <p className="error-message" role="alert">Your role does not have access to this workspace. Select an available page from the sidebar.</p>}
           </div>
         </>
       )}

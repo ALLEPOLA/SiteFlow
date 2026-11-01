@@ -12,6 +12,8 @@ type StockBalance = {
   materialCode: string
   materialName: string
   unit: string
+  reservedQuantity: number
+  availableQuantity: number
   quantityOnHand: number
 }
 
@@ -44,7 +46,10 @@ type MaterialIssue = {
   lines: IssueLine[]
 }
 
+type Hold = { id: number; projectId: number; materialId: number; requestNumber: string; remainingQuantity: number }
+
 type DraftLine = {
+  reservationId: string
   materialId: number
   quantity: string
 }
@@ -81,6 +86,8 @@ function getError(error: unknown) {
 export default function MaterialIssuesPage() {
   const [issues, setIssues] = useState<MaterialIssue[]>([])
   const [balances, setBalances] = useState<StockBalance[]>([])
+  const [holds, setHolds] = useState<Hold[]>([])
+  const [holdsLoading, setHoldsLoading] = useState(false)
   const [canIssue, setCanIssue] = useState(false)
 
   const [loading, setLoading] = useState(true)
@@ -157,6 +164,25 @@ export default function MaterialIssuesPage() {
     return () => controller.abort()
   }, [])
 
+  useEffect(() => {
+    if (!canIssue || !projectId) return
+    const controller = new AbortController()
+    async function loadHolds() {
+      try {
+        const response = await apiFetch('/api/material-reservations?projectId=' + projectId, { signal: controller.signal, cache: 'no-store' })
+        const data = await readApiResponse<Hold[]>(response)
+        if (!controller.signal.aborted) setHolds(data)
+      } catch (e) { if (!controller.signal.aborted) setError(getError(e)) }
+      finally { if (!controller.signal.aborted) setHoldsLoading(false) }
+    }
+    void loadHolds()
+    return () => controller.abort()
+  }, [projectId, canIssue])
+
+  function issueLimit(stock: StockBalance, reservationId: string) {
+    return reservationId ? holds.find(h => h.id === Number(reservationId) && h.materialId === stock.materialId)?.remainingQuantity ?? 0 : stock.availableQuantity
+  }
+
   const availableStock = balances.filter(
     balance => balance.quantityOnHand > 0,
   )
@@ -180,6 +206,8 @@ export default function MaterialIssuesPage() {
 
   function changeProject(value: string) {
     setProjectId(value)
+    setHolds([])
+    setHoldsLoading(Boolean(value))
 
     setDraftLines(
       availableStock
@@ -187,6 +215,7 @@ export default function MaterialIssuesPage() {
         .map(balance => ({
           materialId: balance.materialId,
           quantity: '',
+          reservationId: '',
         })),
     )
   }
@@ -204,7 +233,7 @@ export default function MaterialIssuesPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (savingRef.current) return
+    if (savingRef.current || holdsLoading) return
 
     setError('')
     setSuccess('')
@@ -222,6 +251,7 @@ export default function MaterialIssuesPage() {
     const lines: {
       materialId: number
       quantity: number
+      reservationId: number | null
     }[] = []
 
     for (const draft of draftLines) {
@@ -237,7 +267,7 @@ export default function MaterialIssuesPage() {
         !stock ||
         !Number.isFinite(amount) ||
         amount <= 0 ||
-        amount > stock.quantityOnHand ||
+        amount > issueLimit(stock, draft.reservationId) ||
         amount > 999999999.999 ||
         Math.abs(amount * 1000 - Math.round(amount * 1000)) > 0.0001
       ) {
@@ -249,6 +279,7 @@ export default function MaterialIssuesPage() {
 
       lines.push({
         materialId: draft.materialId,
+        reservationId: draft.reservationId ? Number(draft.reservationId) : null,
         quantity: amount,
       })
     }
@@ -350,6 +381,7 @@ export default function MaterialIssuesPage() {
       {canIssue && (
         <section className="panel">
           <h2>Issue materials</h2>
+          {holdsLoading && <p role="status">Loading project reservations...</p>}
 
           {projects.length === 0 ? (
             <p>
@@ -358,7 +390,7 @@ export default function MaterialIssuesPage() {
             </p>
           ) : (
             <form onSubmit={handleSubmit}>
-              <fieldset className="receipt-fieldset" disabled={saving}>
+              <fieldset className="receipt-fieldset" disabled={saving || holdsLoading}>
                 <div className="form-grid">
                   <label>
                     Project
@@ -431,7 +463,7 @@ export default function MaterialIssuesPage() {
                 {projectId && projectStock.length > 0 && (
                   <>
                     <p>
-                      Enter quantities for the materials being issued.
+                      Select a reservation to fulfill approved work, or use unreserved stock. Enter quantities for the materials being issued.
                       Leave other materials blank. The issue date must
                       be on or after each selected material’s latest
                       stock movement.
@@ -444,7 +476,7 @@ export default function MaterialIssuesPage() {
                             <th>Code</th>
                             <th>Material</th>
                             <th>Unit</th>
-                            <th>Available</th>
+                            <th>On hand / unreserved</th><th>Issue from reservation</th>
                             <th>Issue quantity</th>
                           </tr>
                         </thead>
@@ -462,15 +494,16 @@ export default function MaterialIssuesPage() {
                                 <td>{stock.materialName}</td>
                                 <td>{stock.unit}</td>
                                 <td>
-                                  {formatQuantity(stock.quantityOnHand)}
+                                  {formatQuantity(stock.quantityOnHand)} / {formatQuantity(stock.availableQuantity)}
                                 </td>
+                                <td><select aria-label={'Reservation for ' + stock.materialName} value={draft?.reservationId ?? ''} onChange={e => setDraftLines(current => current.map(l => l.materialId === stock.materialId ? { ...l, reservationId: e.target.value, quantity: '' } : l))}><option value="">Unreserved stock</option>{holds.filter(h => h.materialId === stock.materialId).map(h => <option key={h.id} value={h.id}>RS-{String(h.id).padStart(6, '0')} / {h.requestNumber} / {formatQuantity(h.remainingQuantity)} {stock.unit}</option>)}</select></td>
                                 <td>
                                   <input
                                     type="number"
                                     aria-label={`Issue quantity for ${stock.materialName}`}
                                     min="0.001"
                                     max={Math.min(
-                                      stock.quantityOnHand,
+                                      issueLimit(stock, draft?.reservationId ?? ''),
                                       999999999.999,
                                     )}
                                     step="0.001"

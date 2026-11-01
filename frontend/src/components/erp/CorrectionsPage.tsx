@@ -10,7 +10,13 @@ type Document = { id: number; requestNumber?: string; orderNumber?: string; rece
 type DraftLine = { key: string; materialId: number; label: string; quantity: string; price: string }
 
 export default function CorrectionsPage({ user }: { user: AuthUser }) {
-  const [kind, setKind] = useState('requests')
+  const kinds = [
+    { value: 'requests', label: 'Material requests', role: 'SiteEngineer' },
+    { value: 'orders', label: 'Purchase orders', role: 'ProcurementOfficer' },
+    { value: 'receipts', label: 'Goods receipts', role: 'Storekeeper' },
+    { value: 'issues', label: 'Material issues', role: 'Storekeeper' },
+  ].filter(item => user.roles.includes('Administrator') || user.roles.includes(item.role))
+  const [kind, setKind] = useState(kinds[0]?.value ?? 'requests')
   const urls: Record<string, string> = { requests: '/api/material-requests', orders: '/api/purchase-orders', receipts: '/api/goods-receipts', issues: '/api/material-issues' }
   const documents = useData<Document[]>(urls[kind])
   const materials = useData<Material[]>('/api/materials')
@@ -42,7 +48,7 @@ export default function CorrectionsPage({ user }: { user: AuthUser }) {
         <span className="workspace-page-emblem" aria-hidden="true"><Icon name="corrections" /></span><h1>Corrections</h1><p>Edit drafts and correct posted transactions with a recorded reason.</p></header>
     <Feedback error={command.error || documents.error || materials.error || suppliers.error} message={command.message} />
     <section className="panel"><div className="form-grid">
-      <label>Document type<select value={kind} disabled={command.busy} onChange={e => { setKind(e.target.value); setSelected(null) }}><option value="requests">Material requests</option><option value="orders">Purchase orders</option><option value="receipts">Goods receipts</option><option value="issues">Material issues</option></select></label>
+      <label>Document type<select value={kind} disabled={command.busy} onChange={e => { setKind(e.target.value); setSelected(null) }}>{kinds.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
       <label>Document<select value={selected?.id ?? ''} disabled={documents.loading || command.busy} onChange={e => choose(e.target.value)}><option value="">Select document</option>{!documents.loading && documents.data?.map(d => <option key={d.id} value={d.id}>{kind === 'requests' ? d.requestNumber : kind === 'orders' ? d.orderNumber : kind === 'receipts' ? d.receiptNumber : d.issueNumber} — {d.status}</option>)}</select></label>
     </div></section>
     {selected && <section className="panel"><h2>Document {selected.id} · {selected.status}</h2>

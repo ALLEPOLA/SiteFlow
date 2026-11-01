@@ -1,3 +1,4 @@
+using SiteFlow.API.Security;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,9 +27,9 @@ public class NotificationsController(AppDbContext db) : ControllerBase
             .OrderBy(o => o.ExpectedDeliveryDate).Take(100).Select(o => new { o.Id, o.ExpectedDeliveryDate }).ToListAsync();
         rows.AddRange(orders.Select(o => ($"order-{o.Id}", $"PO-{o.Id:D6} delivery was due {o.ExpectedDeliveryDate:yyyy-MM-dd}.", "orders")));
         var stocks = await db.StockMovements.GroupBy(m => new { m.ProjectId, m.MaterialId, m.Material.Name, m.Material.ReorderLevel })
-            .Select(g => new { g.Key.ProjectId, g.Key.MaterialId, g.Key.Name, g.Key.ReorderLevel, Quantity = g.Sum(m => m.Quantity) })
+            .Select(g => new { g.Key.ProjectId, g.Key.MaterialId, g.Key.Name, g.Key.ReorderLevel, Quantity = g.Sum(m => m.Quantity) - (db.MaterialReservations.Where(r => r.ProjectId == g.Key.ProjectId && r.MaterialId == g.Key.MaterialId).Sum(r => (decimal?)(r.Quantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0m) })
             .Where(s => s.ReorderLevel > 0 && s.Quantity <= s.ReorderLevel).Take(100).ToListAsync();
-        rows.AddRange(stocks.Select(s => ($"stock-{s.ProjectId}-{s.MaterialId}", $"{s.Name} stock in project {s.ProjectId} is {s.Quantity}; reorder level {s.ReorderLevel}.", "inventory")));
+        rows.AddRange(stocks.Select(s => ($"stock-{s.ProjectId}-{s.MaterialId}", $"{s.Name} unreserved stock in project {s.ProjectId} is {s.Quantity}; reorder level {s.ReorderLevel}.", "inventory")));
         if (User.IsInRole("Administrator") || User.IsInRole("ProcurementOfficer"))
         {
             var invoices = await db.SupplierInvoices.Include(i => i.Lines).Include(i => i.Payments).Where(i => i.Status == "Posted" && i.DueDate < today).ToListAsync();
@@ -36,7 +37,7 @@ public class NotificationsController(AppDbContext db) : ControllerBase
                 .Select(i => ($"invoice-{i.Id}", $"Supplier invoice {i.Number} is overdue.", "accounts")));
         }
         var read = await db.NotificationReads.Where(n => n.UserId == db.CurrentUserId).Select(n => n.Key).ToListAsync();
-        return Ok(rows.Select(r => new { key = r.Key, message = r.Message, page = r.Page, isRead = read.Contains(r.Key) }));
+        return Ok(rows.Where(r => WorkspacePermissions.CanAccess(User, r.Page)).Select(r => new { key = r.Key, message = r.Message, page = r.Page, isRead = read.Contains(r.Key) }));
     }
 
     [HttpPost("read")]

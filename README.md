@@ -47,3 +47,13 @@ migration instructions, workflow limits, and verification commands.
 
 See [interface design](docs/UI_DESIGN.md) for the Tailwind setup, responsive layout,
 and motion/accessibility conventions.
+
+
+## Material requirements planning
+
+Open **Material Planning** to compare upcoming demand and safety stock with recorded stock and incoming deliveries due in time, estimate replenishment costs, and prepare a shortage draft for normal review. No historical usage or new database migration is needed. See [planning assumptions and workflow](docs/MATERIAL_PLANNING.md).
+
+
+## Material reservations
+
+Reserve existing stock against approved requests, issue against a hold, or release its unused quantity. Inventory and planning distinguish on-hand, reserved, and available stock. Apply the AddMaterialReservations migration first. See [reservation setup and workflow](docs/MATERIAL_RESERVATIONS.md).

@@ -109,7 +109,7 @@ public class CorrectionsController(AppDbContext db) : ControllerBase
         foreach (var m in movements)
         {
             var stock = await OperationRules.Stock(db, m.ProjectId, m.MaterialId);
-            if (stock.Quantity < m.Quantity) return Conflict(new { message = "Receipt reversal would create negative stock. Reverse dependent issues first." });
+            if (!ReservationRules.CanReduceTo(stock.Quantity - m.Quantity, await ReservationRules.Held(db, m.ProjectId, m.MaterialId))) return Conflict(new { message = "Receipt reversal would remove reserved stock or create negative stock. Release holds or reverse dependent issues first." });
             // Preserve valuation history: remove a receipt only before later movements use its cost.
             if (await db.StockMovements.AnyAsync(x => x.ProjectId == m.ProjectId && x.MaterialId == m.MaterialId && x.Id > m.Id &&
                 x.ReversesMovementId == null && !db.StockMovements.Any(r => r.ReversesMovementId == x.Id)))
@@ -147,6 +147,12 @@ public class CorrectionsController(AppDbContext db) : ControllerBase
             var reversal = OperationRules.Movement(db, m.ProjectId, m.MaterialId, "Reversal", -m.Quantity, m.UnitCost, date > stock.Latest ? date : stock.Latest);
             reversal.ReversesMovementId = m.Id;
             db.StockMovements.Add(reversal);
+        }
+        foreach (var line in issue.Lines.Where(l => l.ReservationId.HasValue))
+        {
+            var hold = await db.MaterialReservations.SingleAsync(r => r.Id == line.ReservationId);
+            if (hold.ConsumedQuantity < line.Quantity) return Conflict(new { message = "Reservation consumption history is inconsistent." });
+            hold.ConsumedQuantity -= line.Quantity;
         }
         issue.Status = "Reversed";
         await db.SaveChangesAsync();

@@ -3,6 +3,8 @@ namespace SiteFlow.API.Models;
 public class MaterialIssueLine
 {
     public int Id { get; set; }
+    public int? ReservationId { get; set; }
+    public MaterialReservation? Reservation { get; set; }
 
     public int MaterialIssueId { get; set; }
 

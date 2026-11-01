@@ -35,6 +35,7 @@ public class MaterialIssueResponse
 
 public class MaterialIssueLineResponse
 {
+    public int? ReservationId { get; set; }
     public int Id { get; set; }
 
     public int MaterialId { get; set; }

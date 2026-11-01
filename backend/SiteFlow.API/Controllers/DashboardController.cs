@@ -1,3 +1,4 @@
+using SiteFlow.API.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,16 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetDashboard(
         CancellationToken cancellationToken)
     {
+        Response.Headers["Cache-Control"] = "no-store";
+        var allowedPages = WorkspacePermissions.Pages(User);
+        var reviewer = WorkspacePermissions.CanReview(User);
+        var engineer = User.IsInRole(AppRoles.SiteEngineer);
+        var purchaser = User.IsInRole(AppRoles.Administrator) || User.IsInRole(AppRoles.ProcurementOfficer);
+        var userId = _context.CurrentUserId;
+        var showReceipts = allowedPages.Contains("receipts");
+        var showIssues = allowedPages.Contains("issues");
+        var showOrders = allowedPages.Contains("orders");
+        var activeReservations = await _context.MaterialReservations.CountAsync(r => r.Quantity > r.ConsumedQuantity + r.ReleasedQuantity, cancellationToken);
         var activeProjects = await _context.Projects
             .AsNoTracking()
             .CountAsync(
@@ -30,7 +41,9 @@ public class DashboardController : ControllerBase
         var pendingRequests = await _context.MaterialRequests
             .AsNoTracking()
             .CountAsync(
-                r => r.Status == "Submitted",
+                r => r.Status == "Submitted" && (reviewer
+                    ? r.CreatedByUserId != null && r.CreatedByUserId != userId
+                    : engineer && r.CreatedByUserId == userId),
                 cancellationToken);
 
         // Draft purchase orders also reserve request quantities.
@@ -87,7 +100,7 @@ public class DashboardController : ControllerBase
 
         var recentReceipts = await _context.GoodsReceipts
             .AsNoTracking()
-            .Where(r => r.Status == "Posted")
+            .Where(r => showReceipts && r.Status == "Posted")
             .OrderByDescending(r => r.CreatedAtUtc)
             .ThenByDescending(r => r.Id)
             .Take(5)
@@ -113,7 +126,7 @@ public class DashboardController : ControllerBase
 
         var recentIssues = await _context.MaterialIssues
             .AsNoTracking()
-            .Where(i => i.Status == "Posted")
+            .Where(i => showIssues && i.Status == "Posted")
             .OrderByDescending(i => i.CreatedAtUtc)
             .ThenByDescending(i => i.Id)
             .Take(5)
@@ -134,7 +147,7 @@ public class DashboardController : ControllerBase
 
         var requestsToReview = await _context.MaterialRequests
             .AsNoTracking()
-            .Where(r => r.Status == "Submitted")
+            .Where(r => reviewer && r.Status == "Submitted" && r.CreatedByUserId != null && r.CreatedByUserId != userId)
             .OrderBy(r => r.SubmittedAtUtc)
             .ThenBy(r => r.Id)
             .Take(5)
@@ -154,9 +167,8 @@ public class DashboardController : ControllerBase
 
         var outstandingDeliveries = await _context.PurchaseOrders
             .AsNoTracking()
-            .Where(p =>
-                p.Status == "Issued" ||
-                p.Status == "PartiallyReceived")
+            .Where(p => showOrders && showReceipts &&
+                (p.Status == "Issued" || p.Status == "PartiallyReceived"))
             .OrderBy(p => p.ExpectedDeliveryDate)
             .ThenBy(p => p.Id)
             .Take(5)
@@ -176,16 +188,18 @@ public class DashboardController : ControllerBase
         return Ok(new
         {
             generatedAtUtc = DateTime.UtcNow,
+            allowedPages,
 
             summary = new
             {
                 activeProjects,
-                pendingRequests,
-                requestsAwaitingPurchase,
-                draftPurchaseOrders,
-                ordersAwaitingDelivery,
-                postedReceipts,
-                postedMaterialIssues
+                activeReservations,
+                pendingRequests = reviewer || engineer ? (int?)pendingRequests : null,
+                requestsAwaitingPurchase = purchaser ? (int?)requestsAwaitingPurchase : null,
+                draftPurchaseOrders = purchaser ? (int?)draftPurchaseOrders : null,
+                ordersAwaitingDelivery = showReceipts ? (int?)ordersAwaitingDelivery : null,
+                postedReceipts = showReceipts ? (int?)postedReceipts : null,
+                postedMaterialIssues = showIssues ? (int?)postedMaterialIssues : null
             },
 
             recentReceipts,

@@ -10,6 +10,8 @@ type StockBalance = {
   materialCode: string
   materialName: string
   unit: string
+  reservedQuantity: number
+  availableQuantity: number
   quantityOnHand: number
 }
 
@@ -362,7 +364,7 @@ export default function InventoryPage() {
                   <th>Material code</th>
                   <th>Material</th>
                   <th>Unit</th>
-                  <th>Quantity on hand</th>
+                  <th>Quantity on hand</th><th>Reserved</th><th>Available</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -385,6 +387,8 @@ export default function InventoryPage() {
                     <td className="number-cell">
                       {formatQuantity(balance.quantityOnHand)}
                     </td>
+                    <td className="number-cell">{formatQuantity(balance.reservedQuantity)}</td>
+                    <td className="number-cell"><strong>{formatQuantity(balance.availableQuantity)}</strong></td>
 
                     <td>
                       <button

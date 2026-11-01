@@ -617,6 +617,9 @@ namespace SiteFlow.API.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
+                    b.Property<int?>("ReservationId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("UnitCost")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -624,6 +627,8 @@ namespace SiteFlow.API.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MaterialId");
+
+                    b.HasIndex("ReservationId");
 
                     b.HasIndex("MaterialIssueId", "MaterialId")
                         .IsUnique();
@@ -726,6 +731,80 @@ namespace SiteFlow.API.Migrations
                             t.HasCheckConstraint("CK_MaterialRequestLines_EstimatedUnitPrice", "`EstimatedUnitPrice` >= 0");
 
                             t.HasCheckConstraint("CK_MaterialRequestLines_Quantity", "`Quantity` > 0");
+                        });
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.MaterialReservation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClientRequestId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)");
+
+                    b.Property<decimal>("ConsumedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("MaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaterialRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<string>("ReleaseReason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<DateTime?>("ReleasedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<decimal>("ReleasedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("MaterialId");
+
+                    b.HasIndex("MaterialRequestId");
+
+                    b.HasIndex("ProjectId", "MaterialId");
+
+                    b.ToTable("MaterialReservations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MaterialReservations_Quantities", "`Quantity` > 0 AND `ConsumedQuantity` >= 0 AND `ReleasedQuantity` >= 0 AND `ConsumedQuantity` + `ReleasedQuantity` <= `Quantity`");
                         });
                 });
 
@@ -1319,9 +1398,16 @@ namespace SiteFlow.API.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("SiteFlow.API.Models.MaterialReservation", "Reservation")
+                        .WithMany()
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Material");
 
                     b.Navigation("MaterialIssue");
+
+                    b.Navigation("Reservation");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.MaterialRequest", b =>
@@ -1366,6 +1452,41 @@ namespace SiteFlow.API.Migrations
                     b.Navigation("Material");
 
                     b.Navigation("MaterialRequest");
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.MaterialReservation", b =>
+                {
+                    b.HasOne("SiteFlow.API.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SiteFlow.API.Models.Material", "Material")
+                        .WithMany()
+                        .HasForeignKey("MaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SiteFlow.API.Models.MaterialRequest", "MaterialRequest")
+                        .WithMany()
+                        .HasForeignKey("MaterialRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SiteFlow.API.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Material");
+
+                    b.Navigation("MaterialRequest");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.ProjectAssignment", b =>

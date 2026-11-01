@@ -251,3 +251,16 @@
 @media print { .dashboard-shortcuts { display: none; } .dashboard-activity { display: block; } }
 
 
+
+/* Shared password fields: independent, accessible visibility controls. */
+.password-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.password-field > label { margin: 0; color: #4a5d50; font-size: 12px; font-weight: 550; }
+.password-input-control { display: block; position: relative; width: 100%; min-width: 0; }
+.password-input-control > input,
+.login-panel .login-fields .password-input-control > input { padding-right: 86px; }
+.password-visibility-button { position: absolute; top: 50%; right: 5px; translate: 0 -50%; display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 72px; min-height: 36px; padding: 6px 8px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #5d7b59; font-size: 11px; line-height: 1; font-weight: 600; }
+.password-visibility-button:hover:not(:disabled) { color: #235f43; background: #eaf1e1; }
+.password-visibility-button:focus-visible { outline: 2px solid #397e5a; outline-offset: 1px; background: #edf4e6; }
+.password-visibility-button:disabled { opacity: .5; cursor: not-allowed; }
+.password-field:focus-within > label { color: #237759; }
+

@@ -21,6 +21,13 @@ using var configured = new AppDbContextFactory().CreateDbContext(Array.Empty<str
 var connection = new MySqlConnectionStringBuilder(Environment.GetEnvironmentVariable("SITEFLOW_TEST_CONNECTION") ?? configured.Database.GetConnectionString() ?? throw new Exception("A test connection is required."));
 var database = "siteflow_test_" + Guid.NewGuid().ToString("N");
 connection.Database = database;
+// Optional local-only transport workaround for Windows test environments without TLS credentials.
+if (args.Contains("--local-no-tls"))
+{
+    if (!new[] { "localhost", "127.0.0.1", "::1" }.Contains(connection.Server, StringComparer.OrdinalIgnoreCase))
+        throw new InvalidOperationException("--local-no-tls is restricted to a local disposable database.");
+    connection.SslMode = MySqlSslMode.Disabled;
+}
 var options = new DbContextOptionsBuilder<AppDbContext>().UseMySql(connection.ConnectionString, new MySqlServerVersion(new Version(8, 0, 36))).Options;
 Process? server = null;
 var checks = 0;
@@ -30,6 +37,87 @@ void Check(bool condition, string message)
     checks++;
     Console.WriteLine("PASS: " + message);
 }
+
+// Workspace access is a union of assigned roles; unknown roles get no module access.
+System.Security.Claims.ClaimsPrincipal WorkspaceUser(params string[] roles) => new(new ClaimsIdentity(
+    roles.Select(role => new Claim(ClaimTypes.Role, role)).Append(new Claim(ClaimTypes.NameIdentifier, "viewer")), "tests"));
+var engineerPermissions = WorkspaceUser("SiteEngineer");
+var managerPermissions = WorkspaceUser("ProjectManager");
+var buyerPermissions = WorkspaceUser("ProcurementOfficer");
+var storePermissions = WorkspaceUser("Storekeeper");
+Check(SiteFlow.API.Security.WorkspacePermissions.CanAccess(engineerPermissions, "planning") &&
+    !SiteFlow.API.Security.WorkspacePermissions.CanAccess(engineerPermissions, "orders") &&
+    !SiteFlow.API.Security.WorkspacePermissions.CanAccess(engineerPermissions, "users"), "Engineer workspace excludes purchasing and administration");
+Check(SiteFlow.API.Security.WorkspacePermissions.CanReview(managerPermissions) &&
+    !SiteFlow.API.Security.WorkspacePermissions.CanAccess(managerPermissions, "corrections"), "Manager can review but cannot enter correction tools");
+Check(SiteFlow.API.Security.WorkspacePermissions.CanAccess(buyerPermissions, "accounts") &&
+    !SiteFlow.API.Security.WorkspacePermissions.CanAccess(buyerPermissions, "issues"), "Procurement workspace includes accounts but excludes material issues");
+Check(SiteFlow.API.Security.WorkspacePermissions.CanAccess(storePermissions, "stock-operations") &&
+    !SiteFlow.API.Security.WorkspacePermissions.CanAccess(storePermissions, "planning") &&
+    !SiteFlow.API.Security.WorkspacePermissions.CanAccess(storePermissions, "costs"), "Storekeeper workspace excludes planning and budget summaries");
+Check(SiteFlow.API.Security.WorkspacePermissions.CanAccess(WorkspaceUser("SiteEngineer", "Storekeeper"), "issues") &&
+    SiteFlow.API.Security.WorkspacePermissions.CanAccess(WorkspaceUser("SiteEngineer", "Storekeeper"), "planning") &&
+    SiteFlow.API.Security.WorkspacePermissions.Pages(WorkspaceUser("Unknown")).Length == 0, "Multiple roles combine and unknown roles fail closed");
+async Task CheckWorkspaceFilter(string role, string controllerName, bool allowed, string? reportKind = null)
+{
+    var context = new DefaultHttpContext { User = WorkspaceUser(role) };
+    var route = new Microsoft.AspNetCore.Routing.RouteData();
+    route.Values["controller"] = controllerName;
+    var action = new Microsoft.AspNetCore.Mvc.ActionContext(context, route,
+        new Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary());
+    var filters = new List<Microsoft.AspNetCore.Mvc.Filters.IFilterMetadata>();
+    var arguments = new Dictionary<string, object?>();
+    if (reportKind is not null) arguments["kind"] = reportKind;
+    var executing = new Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext(action, filters, arguments, new object());
+    var ran = false;
+    await new SiteFlow.API.Security.WorkspacePermissionFilter().OnActionExecutionAsync(executing, () =>
+    {
+        ran = true;
+        return Task.FromResult(new Microsoft.AspNetCore.Mvc.Filters.ActionExecutedContext(action, filters, new object()));
+    });
+    Check(ran == allowed && (allowed || executing.Result is Microsoft.AspNetCore.Mvc.ObjectResult { StatusCode: 403 }),
+        $"{role} API permission for {controllerName}/{reportKind ?? "workspace"}");
+}
+await CheckWorkspaceFilter("SiteEngineer", "PurchaseOrders", false);
+await CheckWorkspaceFilter("SiteEngineer", "MaterialRequests", true);
+await CheckWorkspaceFilter("Storekeeper", "MaterialPlanning", false);
+await CheckWorkspaceFilter("Storekeeper", "GoodsReceipts", true);
+await CheckWorkspaceFilter("ProjectManager", "Corrections", false);
+await CheckWorkspaceFilter("ProcurementOfficer", "MaterialIssues", false);
+await CheckWorkspaceFilter("Administrator", "Users", true);
+await CheckWorkspaceFilter("Unknown", "Dashboard", false);
+await CheckWorkspaceFilter("SiteEngineer", "Reports", false, "costs");
+await CheckWorkspaceFilter("SiteEngineer", "Reports", false, "orders");
+await CheckWorkspaceFilter("SiteEngineer", "Reports", true, "stock");
+await CheckWorkspaceFilter("ProjectManager", "Reports", true, "costs");
+
+// Reservation arithmetic guards every outbound stock path.
+Check(ReservationRules.Available(100, 70) == 30 && ReservationRules.Available(5, 7) == 0, "Reservations reduce available stock without negative free quantities");
+Check(ReservationRules.Remaining(100, 20, 30) == 50, "Partial issue and release reconcile remaining holds");
+Check(!ReservationRules.CanReduceTo(69, 70) && ReservationRules.CanReduceTo(70, 70) &&
+    !ReservationRules.CanReduceTo(-1, 0), "Stock reductions cannot cross reserved or physical stock limits");
+Check(ReservationRules.Remaining(7, 4, 0) == 3 && ReservationRules.Remaining(7, 0, 0) == 7,
+    "Reversing an issue restores its reservation consumption");
+await CheckWorkspaceFilter("SiteEngineer", "MaterialReservations", true);
+await CheckWorkspaceFilter("Storekeeper", "MaterialReservations", true);
+await CheckWorkspaceFilter("Unknown", "MaterialReservations", false);
+
+// Material planning works from user-entered demand, without historical issues.
+var planToday = new DateOnly(2026, 11, 1);
+var planDue = planToday.AddDays(10);
+var firstPlan = MaterialPlanningRules.Calculate(200, 0, 80,
+    new[] { new PlanningDelivery(planToday.AddDays(2), 50), new PlanningDelivery(planToday.AddDays(-1), 20), new PlanningDelivery(planDue.AddDays(1), 30) },
+    planToday, planDue, 6, 2.50m);
+Check(firstPlan.Shortage == 70 && firstPlan.Incoming == 50 && firstPlan.EstimatedCost == 175, "Planning computes shortages without usage history");
+Check(firstPlan.OverdueIncoming == 20 && firstPlan.LateIncoming == 30, "Overdue and late deliveries do not cover demand");
+Check(firstPlan.OrderByDate == planToday.AddDays(4) && !firstPlan.OrderIsLate, "Planning explains supplier order-by date");
+var emptyPlan = MaterialPlanningRules.Calculate(10, 2, 0, Array.Empty<PlanningDelivery>(), planToday, planToday, 7, 3);
+Check(emptyPlan.Shortage == 12 && emptyPlan.OrderIsLate, "First-day planning includes safety stock and flags insufficient lead time");
+var coveredPlan = MaterialPlanningRules.Calculate(10, 0, 20, Array.Empty<PlanningDelivery>(), planToday, planDue, 30, 3);
+Check(coveredPlan.Shortage == 0 && coveredPlan.EstimatedCost == 0 && !coveredPlan.OrderIsLate, "Sufficient stock never generates an unnecessary purchase");
+var boundaryPlan = MaterialPlanningRules.Calculate(10, 0, 0,
+    new[] { new PlanningDelivery(planToday, 4), new PlanningDelivery(planDue, 6) }, planToday, planDue, 0, 0);
+Check(boundaryPlan.Incoming == 10 && boundaryPlan.Shortage == 0, "Deliveries on today and the required date are included");
 
 // Validate export containers independently of the HTTP API.
 var sample = new List<string[]> { new[] { "Name", "Value" }, new[] { "=1+1", "100.50" }, new[] { "Cement & steel", "සිංහල" } };
@@ -57,6 +145,8 @@ using (var scoped = new AppDbContext(options, http))
         scoped.GoodsReceiptLines.Select(p => p.Id).ToQueryString(),
         scoped.MaterialIssues.Select(p => p.Id).ToQueryString(),
         scoped.StockMovements.Select(p => p.Id).ToQueryString(),
+        scoped.MaterialReservations.Select(r => r.Id).ToQueryString(),
+        scoped.StockMovements.GroupBy(m => new { m.ProjectId, m.MaterialId }).Select(g => new { Available = g.Sum(m => m.Quantity) - (scoped.MaterialReservations.Where(r => r.ProjectId == g.Key.ProjectId && r.MaterialId == g.Key.MaterialId).Sum(r => (decimal?)(r.Quantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0m) }).ToQueryString(),
         scoped.SupplierInvoices.Select(p => p.Id).ToQueryString(),
         scoped.DocumentAttachments.Select(p => p.Id).ToQueryString()
     };
@@ -66,8 +156,15 @@ if (args.Contains("--offline"))
 {
     var script = configured.GetService<IMigrator>().GenerateScript();
     Check(script.Contains("CREATE TABLE `InventoryOperations`") && script.Contains("CREATE TABLE `SupplierInvoices`") && script.Contains("CREATE TABLE `AuditEntries`"), "MySQL migration script includes ERP tables");
+    Check(script.Contains("CREATE TABLE `MaterialReservations`") && script.Contains("CK_MaterialReservations_Quantities") && script.Contains("IX_MaterialReservations_ClientRequestId"), "Migration contains reservation integrity checks and replay protection");
     Check(!configured.Database.HasPendingModelChanges(), "Migration snapshot matches the current data model");
     Console.WriteLine($"ALL {checks} OFFLINE CHECKS PASSED. Database integration checks require a disposable test database.");
+    return;
+}
+
+if (args.Contains("--local-only") && !new[] { "localhost", "127.0.0.1", "::1" }.Contains(connection.Server, StringComparer.OrdinalIgnoreCase))
+{
+    Console.WriteLine("SKIPPED database integration tests: --local-only refuses a remote database server.");
     return;
 }
 
@@ -149,6 +246,23 @@ try
     await Request(engineer, "GET", $"/api/projects/{p2}", expected: 404);
     await Request(engineer, "GET", "/api/users", expected: 403);
 
+    await Request(engineer, "GET", "/api/project-costs", expected: 403);
+    await Request(engineer, "GET", "/api/purchase-orders", expected: 403);
+    await Request(engineer, "GET", "/api/reports/costs/xlsx", expected: 403);
+    var engineerDashboard = await Request(engineer, "GET", "/api/dashboard");
+    Check(engineerDashboard["summary"]!["requestsAwaitingPurchase"] is null && engineerDashboard["requestsToReview"]!.AsArray().Count == 0 && engineerDashboard["recentReceipts"]!.AsArray().Count == 0, "Engineer dashboard excludes review and purchasing work");
+
+    var planningDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(10).ToString("yyyy-MM-dd");
+    object PlanBody(int projectId, decimal quantity = 20) => new { projectId, requiredDate = planningDate,
+        lines = new[] { new { materialId = m, quantity, safetyStock = 0, leadTimeDays = 7, estimatedUnitPrice = 10 } } };
+    await Request(anonymous, "POST", "/api/material-planning/analyze", PlanBody(p), 401);
+    await Request(engineer, "POST", "/api/material-planning/analyze", PlanBody(p2), 404);
+    var emptyPlanning = await Request(engineer, "POST", "/api/material-planning/analyze", PlanBody(p));
+    Check(emptyPlanning["lines"]![0]!["shortage"]!.GetValue<decimal>() == 20, "Planning API works for a new project with no history");
+    await Request(engineer, "POST", "/api/material-planning/analyze", PlanBody(p, 0.0001m), 400);
+    await Request(engineer, "POST", "/api/material-planning/analyze", new { projectId = p, requiredDate = planningDate,
+        lines = new[] { new { materialId = m, quantity = 1, estimatedUnitPrice = 10 }, new { materialId = m, quantity = 2, estimatedUnitPrice = 10 } } }, 400);
+
     var day = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
     var request = await Request(engineer, "POST", "/api/material-requests", new { projectId = p, requiredDate = day, reason = "Materials", lines = new[] { new { materialId = m, quantity = 10, estimatedUnitPrice = 10 }, new { materialId = m2, quantity = 10, estimatedUnitPrice = 10 } } }, 201);
     var r = Id(request);
@@ -167,6 +281,68 @@ try
     var ol1 = order["lines"]![0]!["id"]!.GetValue<int>();
     var ol2 = order["lines"]![1]!["id"]!.GetValue<int>();
     var receipt = await Request(admin, "POST", "/api/goods-receipts", new { clientRequestId = Guid.NewGuid(), purchaseOrderId = o, receivedDate = day, deliveryNoteNumber = "TEST1", lines = new[] { new { purchaseOrderLineId = ol1, quantity = 10 } } }, 201);
+    var partialPlanning = await Request(engineer, "POST", "/api/material-planning/analyze", new { projectId = p, requiredDate = planningDate,
+        lines = new[] { new { materialId = m, quantity = 20, estimatedUnitPrice = 10 }, new { materialId = m2, quantity = 20, estimatedUnitPrice = 10 } } });
+    var cementPlanning = partialPlanning["lines"]!.AsArray().Single(l => l!["materialId"]!.GetValue<int>() == m)!;
+    var steelPlanning = partialPlanning["lines"]!.AsArray().Single(l => l!["materialId"]!.GetValue<int>() == m2)!;
+    Check(cementPlanning["stock"]!.GetValue<decimal>() == 10 && cementPlanning["incoming"]!.GetValue<decimal>() == 0 &&
+        steelPlanning["stock"]!.GetValue<decimal>() == 0 && steelPlanning["incoming"]!.GetValue<decimal>() == 10,
+        "Planning counts received stock and only the unreceived portion of open orders");
+    Check(partialPlanning["estimatedCost"]!.GetValue<decimal>() == 200 && partialPlanning["budgetAfterCommitments"]!.GetValue<decimal>() == 800,
+        "Planning cost estimate and issued commitments reconcile");
+
+    var reserveBody = new { clientRequestId = Guid.NewGuid(), materialRequestId = r, materialId = m, quantity = 7, reason = "Hold for approved foundation work" };
+    await Request(anonymous, "POST", "/api/material-reservations", reserveBody, 401);
+    var heldReservation = await Request(engineer, "POST", "/api/material-reservations", reserveBody, 201);
+    var holdId = Id(heldReservation);
+    await Request(engineer, "POST", "/api/material-reservations", reserveBody);
+    await Request(engineer, "POST", "/api/material-reservations", new { reserveBody.clientRequestId, materialRequestId = r, materialId = m, quantity = 8, reserveBody.reason }, 409);
+    var reservationBalances = await Request(engineer, "GET", "/api/inventory/balances");
+    var heldBalance = reservationBalances.AsArray().Single(b => b!["projectId"]!.GetValue<int>() == p && b["materialId"]!.GetValue<int>() == m)!;
+    Check(heldBalance["quantityOnHand"]!.GetValue<decimal>() == 10 && heldBalance["reservedQuantity"]!.GetValue<decimal>() == 7 && heldBalance["availableQuantity"]!.GetValue<decimal>() == 3,
+        "Reservation retry keeps physical stock unchanged and holds quantity only once");
+    var reservedPlanning = await Request(engineer, "POST", "/api/material-planning/analyze", PlanBody(p));
+    Check(reservedPlanning["lines"]![0]!["stock"]!.GetValue<decimal>() == 3 &&
+        reservedPlanning["lines"]![0]!["reservedStock"]!.GetValue<decimal>() == 7 &&
+        reservedPlanning["lines"]![0]!["shortage"]!.GetValue<decimal>() == 17, "Planning uses unreserved stock");
+
+    async Task<(int Status, int Id)> CompetingReservation(HttpClient client)
+    {
+        var token = await client.GetFromJsonAsync<JsonNode>("/api/auth/csrf");
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/material-reservations");
+        message.Headers.Add("X-CSRF-TOKEN", token!["token"]!.GetValue<string>());
+        message.Content = JsonContent.Create(new { clientRequestId = Guid.NewGuid(), materialRequestId = r, materialId = m, quantity = 2, reason = "Competing hold" });
+        using var response = await client.SendAsync(message);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync());
+        return ((int)response.StatusCode, response.StatusCode == HttpStatusCode.Created ? Id(body!) : 0);
+    }
+    var competing = await Task.WhenAll(CompetingReservation(admin), CompetingReservation(engineer));
+    Check(competing.Select(c => c.Status).Order().SequenceEqual(new[] { 201, 409 }), "Concurrent reservations cannot over-allocate stock or the approved request");
+    await Request(admin, "POST", $"/api/material-reservations/{competing.Single(c => c.Status == 201).Id}/release", new { reason = "Release test hold" });
+
+    await Request(admin, "POST", "/api/material-issues", new { clientRequestId = Guid.NewGuid(), projectId = p, issueDate = day, purpose = "Unreserved attempt", receivedBy = "Test", lines = new[] { new { materialId = m, quantity = 4 } } }, 409);
+    await Request(admin, "POST", "/api/inventory-operations", new { clientRequestId = Guid.NewGuid(), projectId = p, destinationProjectId = p2, materialId = m, kind = "Transfer", quantity = 4, unitCost = 0, date = day, reason = "Protected hold" }, 409);
+    await Request(admin, "POST", "/api/inventory-operations", new { clientRequestId = Guid.NewGuid(), projectId = p, materialId = m, kind = "Count", quantity = 6, unitCost = 0, date = day, reason = "Protected hold" }, 409);
+    await Request(admin, "POST", "/api/inventory-operations", new { clientRequestId = Guid.NewGuid(), projectId = p, materialId = m, kind = "SupplierReturn", quantity = 4, unitCost = 0, goodsReceiptLineId = receipt["lines"]![0]!["id"]!.GetValue<int>(), date = day, reason = "Protected hold" }, 409);
+    await Request(admin, "POST", $"/api/corrections/receipts/{Id(receipt)}/reverse", new { reason = "Cannot remove reserved stock" }, 409);
+    await Request(admin, "POST", "/api/material-issues", new { clientRequestId = Guid.NewGuid(), projectId = p, issueDate = day, purpose = "Excess hold consumption", receivedBy = "Test", lines = new[] { new { materialId = m, quantity = 8, reservationId = holdId } } }, 409);
+    var reservedIssueBody = new { clientRequestId = Guid.NewGuid(), projectId = p, issueDate = day, purpose = "Reserved work", receivedBy = "Test", lines = new[] { new { materialId = m, quantity = 4, reservationId = holdId } } };
+    var reservedIssue = await Request(admin, "POST", "/api/material-issues", reservedIssueBody, 201);
+    await Request(admin, "POST", "/api/material-issues", reservedIssueBody);
+    var holdsAfterIssue = await Request(engineer, "GET", $"/api/material-reservations?projectId={p}");
+    Check(holdsAfterIssue.AsArray().Single(h => h!["id"]!.GetValue<int>() == holdId)!["remainingQuantity"]!.GetValue<decimal>() == 3,
+        "Reserved issue retries consume a hold only once");
+    await Request(admin, "POST", $"/api/corrections/issues/{Id(reservedIssue)}/reverse", new { reason = "Restore reservation" });
+    var restoredHolds = await Request(engineer, "GET", $"/api/material-reservations?projectId={p}");
+    Check(restoredHolds.AsArray().Single(h => h!["id"]!.GetValue<int>() == holdId)!["remainingQuantity"]!.GetValue<decimal>() == 7,
+        "Reversing reserved issues restores the hold and stock together");
+    await Request(engineer, "POST", $"/api/material-reservations/{holdId}/release", new { reason = "Work rescheduled" });
+    await Request(engineer, "POST", $"/api/material-reservations/{holdId}/release", new { reason = "Release retry" });
+    await Request(engineer, "POST", "/api/material-reservations", reserveBody);
+    var releasedBalances = await Request(engineer, "GET", "/api/inventory/balances");
+    Check(releasedBalances.AsArray().Single(b => b!["projectId"]!.GetValue<int>() == p && b["materialId"]!.GetValue<int>() == m)!["availableQuantity"]!.GetValue<decimal>() == 10,
+        "Release and creation retries cannot accidentally reactivate a closed hold");
+
     var receipt2 = await Request(admin, "POST", "/api/goods-receipts", new { clientRequestId = Guid.NewGuid(), purchaseOrderId = o, receivedDate = day, deliveryNoteNumber = "TEST2", lines = new[] { new { purchaseOrderLineId = ol2, quantity = 10 } } }, 201);
     var gr = Id(receipt); var gr2 = Id(receipt2);
     var rl = receipt["lines"]![0]!["id"]!.GetValue<int>();
@@ -243,7 +419,7 @@ try
         Check(response.IsSuccessStatusCode, "Assigned staff can attach documents");
     }
     await Request(engineer, "GET", $"/api/documents?resourceType=Project&resourceId={p2}", expected: 404);
-    using (var file = await engineer.GetAsync("/api/reports/costs/xlsx"))
+    using (var file = await engineer.GetAsync("/api/reports/stock/xlsx"))
     {
         Check(file.IsSuccessStatusCode, "Assigned project reports export successfully");
         using var archive = new ZipArchive(new MemoryStream(await file.Content.ReadAsByteArrayAsync()));

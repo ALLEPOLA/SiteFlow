@@ -51,6 +51,7 @@ public class InventoryController : ControllerBase
                 m.MaterialId == materialId.Value);
         }
 
+        await using var snapshot = await _context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
         var balances = await query
             .GroupBy(m => new
             {
@@ -78,7 +79,17 @@ public class InventoryController : ControllerBase
             .ThenBy(item => item.MaterialCode)
             .ToListAsync(cancellationToken);
 
-        return Ok(balances);
+        var held = await _context.MaterialReservations.AsNoTracking()
+            .Where(r => (!projectId.HasValue || r.ProjectId == projectId) && (!materialId.HasValue || r.MaterialId == materialId))
+            .GroupBy(r => new { r.ProjectId, r.MaterialId })
+            .Select(g => new { g.Key.ProjectId, g.Key.MaterialId, Quantity = g.Sum(r => r.Quantity - r.ConsumedQuantity - r.ReleasedQuantity) })
+            .ToListAsync(cancellationToken);
+        var reserved = held.ToDictionary(r => (r.ProjectId, r.MaterialId), r => r.Quantity);
+        await snapshot.CommitAsync(cancellationToken);
+        return Ok(balances.Select(b => new { b.ProjectId, b.ProjectCode, b.ProjectName, b.MaterialId,
+            b.MaterialCode, b.MaterialName, b.Unit, b.QuantityOnHand,
+            reservedQuantity = reserved.GetValueOrDefault((b.ProjectId, b.MaterialId)),
+            availableQuantity = ReservationRules.Available(b.QuantityOnHand, reserved.GetValueOrDefault((b.ProjectId, b.MaterialId))) }));
     }
 
     [HttpGet("movements")]
