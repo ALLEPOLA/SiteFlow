@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
 import Icon from './ui/Icon'
+import ConstructionAnimation from './ConstructionAnimation'
 
 type DashboardDestination =
   | 'projects'
@@ -116,7 +117,7 @@ export default function DashboardPage({ onNavigate }: Props) {
   }, [refreshKey])
 
   return (
-    <>
+    <div className="dashboard-page">
       <header className="page-header dashboard-heading">
         <p className="eyebrow">OPERATIONS OVERVIEW</p>
         <h1>Your operations, at a glance<span className="text-teal-600">.</span></h1>
@@ -125,9 +126,15 @@ export default function DashboardPage({ onNavigate }: Props) {
 
       <section className="dashboard-hero">
         <div className="relative z-10"><span className="hero-label"><span />CONNECTED MATERIALS MANAGEMENT</span><h2>Keep every site<br /><span>moving forward.</span></h2><p>From the first request to the final issue.<br className="hidden sm:block" /> Everything you need to keep materials flowing.</p><button type="button" className="hero-action" onClick={() => onNavigate('inventory')}>Explore your inventory<Icon name="arrow" /></button></div>
-        <div className="hero-flow" aria-label="Materials workflow"><div><span className="hero-flow-icon"><Icon name="requests" /></span><span>01</span><strong>Request</strong></div><i /><div><span className="hero-flow-icon"><Icon name="orders" /></span><span>02</span><strong>Purchase</strong></div><i /><div><span className="hero-flow-icon"><Icon name="inventory" /></span><span>03</span><strong>Receive & track</strong></div></div>
-      </section>
+        <div className="dashboard-hero-visual"><ConstructionAnimation /><div className="hero-flow" aria-label="Materials workflow"><div><span className="hero-flow-icon"><Icon name="requests" /></span><span>01</span><strong>Request</strong></div><i /><div><span className="hero-flow-icon"><Icon name="orders" /></span><span>02</span><strong>Purchase</strong></div><i /><div><span className="hero-flow-icon"><Icon name="inventory" /></span><span>03</span><strong>Receive & track</strong></div></div>
+      </div></section>
 
+      <nav className="dashboard-shortcuts" aria-label="Dashboard quick access">
+        <button type="button" onClick={() => onNavigate('requests')}><span><Icon name="requests" /></span><div><strong>Material requests</strong><small>Plan the next site requirement</small></div><Icon name="arrow" /></button>
+        <button type="button" onClick={() => onNavigate('orders')}><span><Icon name="orders" /></span><div><strong>Purchase orders</strong><small>Keep procurement moving</small></div><Icon name="arrow" /></button>
+        <button type="button" onClick={() => onNavigate('receipts')}><span><Icon name="receipts" /></span><div><strong>Goods receipts</strong><small>Review incoming materials</small></div><Icon name="arrow" /></button>
+        <button type="button" onClick={() => onNavigate('inventory')}><span><Icon name="inventory" /></span><div><strong>Site inventory</strong><small>Trace stock and movements</small></div><Icon name="arrow" /></button>
+      </nav>
       <div className="section-toolbar dashboard-toolbar">
         <p>
           {loading
@@ -163,6 +170,7 @@ export default function DashboardPage({ onNavigate }: Props) {
               className="dashboard-card"
               onClick={() => onNavigate('projects')}
             >
+              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="projects" /></span>
               <span>Active projects</span>
               <strong>{data.summary.activeProjects}</strong>
               <small>View projects</small>
@@ -173,6 +181,7 @@ export default function DashboardPage({ onNavigate }: Props) {
               className="dashboard-card"
               onClick={() => onNavigate('requests')}
             >
+              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="requests" /></span>
               <span>Requests awaiting review</span>
               <strong>{data.summary.pendingRequests}</strong>
               <small>View material requests</small>
@@ -183,6 +192,7 @@ export default function DashboardPage({ onNavigate }: Props) {
               className="dashboard-card"
               onClick={() => onNavigate('orders')}
             >
+              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="orders" /></span>
               <span>Approved requests to order</span>
               <strong>{data.summary.requestsAwaitingPurchase}</strong>
               <small>View purchase orders</small>
@@ -193,6 +203,7 @@ export default function DashboardPage({ onNavigate }: Props) {
               className="dashboard-card"
               onClick={() => onNavigate('orders')}
             >
+              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="orders" /></span>
               <span>Draft purchase orders</span>
               <strong>{data.summary.draftPurchaseOrders}</strong>
               <small>View purchase orders</small>
@@ -203,6 +214,7 @@ export default function DashboardPage({ onNavigate }: Props) {
               className="dashboard-card"
               onClick={() => onNavigate('receipts')}
             >
+              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="receipts" /></span>
               <span>Orders awaiting delivery</span>
               <strong>{data.summary.ordersAwaitingDelivery}</strong>
               <small>View goods receipts</small>
@@ -213,6 +225,7 @@ export default function DashboardPage({ onNavigate }: Props) {
               className="dashboard-card"
               onClick={() => onNavigate('receipts')}
             >
+              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="inventory" /></span>
               <span>Posted goods receipts</span>
               <strong>{data.summary.postedReceipts}</strong>
               <small>View deliveries</small>
@@ -223,12 +236,14 @@ export default function DashboardPage({ onNavigate }: Props) {
               className="dashboard-card"
               onClick={() => onNavigate('issues')}
             >
+              <span className="dashboard-metric-icon" aria-hidden="true"><Icon name="issues" /></span>
               <span>Posted material issues</span>
               <strong>{data.summary.postedMaterialIssues}</strong>
               <small>View material issues</small>
             </button>
           </div>
 
+          <div className="dashboard-activity">
           <section className="panel">
             <div className="section-toolbar">
               <h2>Requests awaiting review</h2>
@@ -421,8 +436,9 @@ export default function DashboardPage({ onNavigate }: Props) {
               for each project.
             </p>
           </section>
+          </div>
         </>
       ) : null}
-    </>
+    </div>
   )
 }

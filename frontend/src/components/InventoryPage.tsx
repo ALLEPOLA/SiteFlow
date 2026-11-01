@@ -1,3 +1,4 @@
+import Icon from './ui/Icon'
 import { useEffect, useState } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
 
@@ -245,6 +246,7 @@ export default function InventoryPage() {
   return (
     <>
       <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="inventory" /></span>
         <h1>Inventory</h1>
         <p>View project stock balances and material movements.</p>
       </header>

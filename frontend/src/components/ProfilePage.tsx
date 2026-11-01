@@ -1,3 +1,4 @@
+import Icon from './ui/Icon'
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
@@ -144,6 +145,7 @@ export default function ProfilePage({
   return (
     <>
       <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="profile" /></span>
         <h1>
           {user.mustChangePassword
             ? 'Change your temporary password'

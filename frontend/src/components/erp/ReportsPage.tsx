@@ -1,3 +1,4 @@
+import Icon from '../ui/Icon'
 import { useState } from 'react'
 import { download, useCommand, useData } from './ErpUi'
 import { Feedback } from './Feedback'
@@ -11,7 +12,8 @@ export default function ReportsPage() {
   const [project, setProject] = useState('')
   const [order, setOrder] = useState('')
   return <>
-    <header className="page-header"><h1>Reports &amp; Exports</h1><p>Download purchase orders, stock ledgers, and project material cost summaries.</p></header>
+    <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="reports" /></span><h1>Reports &amp; Exports</h1><p>Download purchase orders, stock ledgers, and project material cost summaries.</p></header>
     <Feedback error={command.error || projects.error || orders.error} />
     <section className="panel"><div className="form-grid">
       <label>Report<select value={kind} onChange={e => { setKind(e.target.value); setOrder('') }}><option value="costs">Project cost summary</option><option value="orders">Purchase orders</option><option value="stock">Stock movement ledger</option></select></label>

@@ -1,3 +1,4 @@
+import Icon from './ui/Icon'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
@@ -185,6 +186,7 @@ export default function MasterDataPage({
   return (
     <>
       <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name={title === 'Materials' ? 'materials' : title === 'Suppliers' ? 'suppliers' : 'projects'} /></span>
         <h1>{title}</h1>
         <p>{description}</p>
       </header>

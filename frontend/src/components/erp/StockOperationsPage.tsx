@@ -1,3 +1,4 @@
+import Icon from '../ui/Icon'
 import { useRef, useState } from 'react'
 import { money, send, today, useCommand, useData } from './ErpUi'
 import { Feedback } from './Feedback'
@@ -23,7 +24,8 @@ export default function StockOperationsPage() {
   const [reason, setReason] = useState('')
   const [receiptLine, setReceiptLine] = useState('')
   return <>
-    <header className="page-header"><h1>Stock Operations</h1><p>Record physical counts, stock adjustments, project transfers, and supplier returns.</p></header>
+    <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="stock-operations" /></span><h1>Stock Operations</h1><p>Record physical counts, stock adjustments, project transfers, and supplier returns.</p></header>
     <Feedback error={command.error || projects.error || materials.error || receipts.error || operations.error} message={command.message} />
     <section className="panel"><h2>Post inventory operation</h2>
       <form onSubmit={async e => { e.preventDefault(); if (!window.confirm('Post this inventory operation? It changes stock immediately.')) return

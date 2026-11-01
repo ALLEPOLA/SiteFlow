@@ -1,3 +1,4 @@
+import Icon from '../ui/Icon'
 import { useRef, useState } from 'react'
 import { money, send, today, useCommand, useData } from './ErpUi'
 import { Feedback } from './Feedback'
@@ -25,7 +26,8 @@ export default function SupplierAccountsPage() {
   const selected = invoices.data?.find(i => i.id === Number(selectedId))
   function refresh() { invoices.refresh(); billable.refresh() }
   return <>
-    <header className="page-header"><h1>Supplier Accounts</h1><p>Match invoices to received materials and record supplier payments in LKR.</p></header>
+    <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="accounts" /></span><h1>Supplier Accounts</h1><p>Match invoices to received materials and record supplier payments in LKR.</p></header>
     <Feedback error={command.error || invoices.error || billable.error} message={command.message} />
     <section className="panel"><h2>Record matched invoice</h2><p>Invoice quantities cannot exceed unreturned, uninvoiced receipts. Unit prices must match the purchase order. This register covers material values before tax.</p>
       <form onSubmit={async e => { e.preventDefault(); if (await command.run(() => send('/api/supplier-accounts/invoices', {

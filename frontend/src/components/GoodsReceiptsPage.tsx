@@ -1,3 +1,4 @@
+import Icon from './ui/Icon'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
@@ -346,6 +347,7 @@ export default function GoodsReceiptsPage() {
   return (
     <>
       <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="receipts" /></span>
         <h1>Goods Receipts</h1>
         <p>Record materials delivered against issued purchase orders.</p>
       </header>

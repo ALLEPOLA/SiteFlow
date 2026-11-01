@@ -1,0 +1,69 @@
+
+/* Shared workspace theme: applies to every signed-in module. */
+.app-shell { background: radial-gradient(ellipse at 90% 0, #e7efdc70, transparent 42%), #f5f7f2; }
+.app-sidebar { background: linear-gradient(165deg, #173a30, #122e29 65%); box-shadow: 6px 0 30px #163e2805; }
+.nav-button { border-radius: 10px; }
+.nav-button.active { background: linear-gradient(105deg, #365a48, #294c3e); box-shadow: inset 3px 0 0 #bedb96, 0 3px 8px #051e1715; }
+.app-toolbar { background: #fffffff0; box-shadow: 0 3px 18px #25472b03; }
+.app-toolbar .icon-button { border-radius: 11px; }
+.workspace-content .page-header:not(.dashboard-heading) { position: relative; isolation: isolate; min-height: 112px; padding: 23px 100px 23px 25px; border: 1px solid #dce7d4; border-radius: 18px; background: linear-gradient(110deg, #fdfefb, #eef4e5); box-shadow: 0 5px 18px #214b2d04; overflow: hidden; }
+.workspace-content .page-header:not(.dashboard-heading)::after { content: ''; position: absolute; z-index: -1; inset: 0 0 0 auto; width: 250px; background-image: linear-gradient(#7d9e6510 1px, transparent 1px), linear-gradient(90deg, #7d9e6510 1px, transparent 1px); background-size: 23px 23px; mask-image: linear-gradient(90deg, transparent, black); pointer-events: none; }
+.workspace-content .page-header:not(.dashboard-heading)::before { content: ''; position: absolute; width: 3px; top: 24px; bottom: 24px; left: 0; background: linear-gradient(#b8cf89, #398164); border-radius: 3px; }
+.workspace-content .page-header:not(.dashboard-heading) h1 { font-size: clamp(24px, 2.5vw, 33px); color: #214b39; margin-bottom: 7px; }
+.workspace-content .page-header:not(.dashboard-heading) > p:last-child { margin-bottom: 0; max-width: 720px; line-height: 1.7; }
+.workspace-page-emblem { position: absolute; right: 24px; top: 50%; translate: 0 -50%; width: 53px; height: 53px; display: grid; place-items: center; border: 1px solid #cfdfbf; border-radius: 15px; color: #54804f; background: linear-gradient(145deg, #f8fbed, #dfeccc); box-shadow: 0 5px 16px #315c2d08, inset 0 1px 0 white; animation: sf-module-emblem .6s ease-out both; }
+.workspace-page-emblem .ui-icon { width: 26px; height: 26px; }
+.workspace-content .panel { border-color: #dfe7d8; border-radius: 16px; background: linear-gradient(145deg, #fff, #fdfefa); box-shadow: 0 5px 20px #21452e05; transition: border-color .2s ease, box-shadow .2s ease; }
+.workspace-content .panel:focus-within { border-color: #b3cb9c; box-shadow: 0 5px 22px #21452e08; }
+.workspace-content .panel h2 { color: #2b523e; letter-spacing: -.025em; }
+.workspace-content .panel > h2 { padding-bottom: 14px; border-bottom: 1px solid #e8eddf; }
+.workspace-content .section-toolbar h2 { display: flex; align-items: center; gap: 9px; }
+.workspace-content .section-toolbar h2::before { content: ''; width: 4px; height: 15px; background: #a4be7d; border-radius: 4px; flex-shrink: 0; }
+.workspace-content .dashboard-activity h2 { padding-left: 0; }
+.workspace-content .dashboard-activity h2::before { position: static; }
+.workspace-content :is(input, select, textarea) { border-radius: 10px; background-color: #fbfcf8; box-shadow: inset 0 2px 3px #22432c03; }
+.workspace-content label:focus-within { color: #237759; }
+.workspace-content :is(input, select, textarea):focus-visible { outline: 2px solid #368365; outline-offset: 2px; }
+.workspace-content :is(input[type='checkbox'], input[type='radio']) { border-radius: initial; box-shadow: none; }
+.workspace-content .primary-button { border-radius: 10px; background: linear-gradient(110deg, #1b684e, #278460); box-shadow: 0 4px 10px #207b6116, inset 0 1px 0 #ffffff17; }
+.workspace-content .secondary-button { border-radius: 9px; background: linear-gradient(#fff, #fbfcf7); }
+.workspace-content :is(.primary-button, .secondary-button):focus-visible { outline: 3px solid #6b9b69; outline-offset: 3px; }
+.workspace-content .table-container { border-radius: 12px; border-color: #e1e9da; background: white; }
+.workspace-content th { background: #f0f5e9; color: #556d47; padding-block: 13px; }
+.workspace-content td { padding-block: 15px; }
+.workspace-content tbody tr:nth-child(even) { background: #fbfcf8; }
+.workspace-content tbody tr:hover { background: #f0f6e7; }
+.workspace-content .status-badge { border-radius: 20px; padding: 4px 10px; }
+.workspace-content .request-line { border-radius: 13px; background: linear-gradient(130deg, #f6f9ef, #fbfcf8); border-color: #e0e8d6; }
+.workspace-content .request-total { padding: 14px 17px; border: 1px solid #dce8cf; border-radius: 11px; background: #f2f7eb; }
+.workspace-content :is(.cost-summary, .inventory-summary) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+.workspace-content :is(.cost-summary, .inventory-summary) .panel { position: relative; overflow: hidden; background: linear-gradient(140deg, #fff, #f2f7e9); border-top: 3px solid #a8c394; }
+.workspace-content :is(.cost-summary, .inventory-summary) .panel::after { content: ''; position: absolute; right: -30px; top: -40px; width: 100px; height: 100px; border: 1px solid #a8c39430; border-radius: 50%; pointer-events: none; }
+.workspace-content :is(.cost-summary, .inventory-summary) strong { font-size: clamp(23px, 2vw, 30px); }
+.workspace-content .notification-list li { margin-bottom: 10px; padding: 18px; border: 1px solid #e0e9d7; border-radius: 12px; background: linear-gradient(110deg, white, #f7faf2); }
+.workspace-content .inventory-pagination { padding-top: 16px; border-top: 1px solid #e4ebdd; }
+.workspace-content .success-message { border-left: 3px solid #64994f; background: #f0f7e9; }
+.workspace-content .error-message { border-left: 3px solid #b8614e; }
+.workspace-content .review-summary { border-radius: 12px; padding: 18px; border: 1px solid #e0e8d6; background: #f8faf4; }
+.workspace-footer { background: transparent; }
+@keyframes sf-module-emblem { from { opacity: 0; scale: .8; rotate: -8deg; } to { opacity: 1; scale: 1; rotate: 0deg; } }
+@media (max-width: 767px) {
+  .workspace-content .page-header:not(.dashboard-heading) { padding: 20px 73px 20px 19px; min-height: 100px; border-radius: 14px; }
+  .workspace-page-emblem { right: 16px; width: 40px; height: 40px; border-radius: 12px; }
+  .workspace-page-emblem .ui-icon { width: 21px; height: 21px; }
+  .workspace-content .panel { padding: 18px; border-radius: 14px; }
+  .workspace-content .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .workspace-content .section-toolbar { align-items: flex-start; }
+  .workspace-content .inventory-filters label { flex-basis: 100%; }
+}
+@media (max-width: 400px) {
+  .workspace-content .panel { padding: 15px; }
+  .workspace-content .page-header:not(.dashboard-heading) h1 { font-size: 23px; overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) { .workspace-page-emblem { animation: none; } .workspace-content .panel { transition: none; } }
+@media print {
+  .app-shell { background: white; }
+  .workspace-content .page-header:not(.dashboard-heading) { padding: 0; border: none; background: none; box-shadow: none; }
+  .workspace-page-emblem, .workspace-content .page-header::before, .workspace-content .page-header::after { display: none; }
+  .workspace-content .panel { background: white; box-shadow: none; }
+}

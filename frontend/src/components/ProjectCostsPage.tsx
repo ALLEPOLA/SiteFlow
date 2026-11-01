@@ -1,3 +1,4 @@
+import Icon from './ui/Icon'
 import { useEffect, useState } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
 
@@ -61,6 +62,7 @@ export default function ProjectCostsPage() {
   return (
     <>
       <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="costs" /></span>
         <h1>Project Costs</h1>
         <p>Compare project budgets with material purchases and consumption.</p>
       </header>

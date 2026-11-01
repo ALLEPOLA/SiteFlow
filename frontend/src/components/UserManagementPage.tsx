@@ -1,3 +1,4 @@
+import Icon from './ui/Icon'
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
@@ -142,6 +143,7 @@ export default function UserManagementPage() {
   return (
     <>
       <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="users" /></span>
         <h1>User Management</h1>
         <p>Create staff accounts and assign their responsibilities.</p>
       </header>

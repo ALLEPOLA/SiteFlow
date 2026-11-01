@@ -1,3 +1,4 @@
+import Icon from '../ui/Icon'
 import { useState } from 'react'
 import type { AuthUser } from '../../types/auth'
 import { send, useCommand, useData } from './ErpUi'
@@ -37,7 +38,8 @@ export default function CorrectionsPage({ user }: { user: AuthUser }) {
     if (await command.run(() => send(`/api/corrections/${kind}/${selected.id}/${action}`, { reason }))) { setSelected(null); documents.refresh() }
   }
   return <>
-    <header className="page-header"><h1>Corrections</h1><p>Edit drafts and correct posted transactions with a recorded reason.</p></header>
+    <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="corrections" /></span><h1>Corrections</h1><p>Edit drafts and correct posted transactions with a recorded reason.</p></header>
     <Feedback error={command.error || documents.error || materials.error || suppliers.error} message={command.message} />
     <section className="panel"><div className="form-grid">
       <label>Document type<select value={kind} disabled={command.busy} onChange={e => { setKind(e.target.value); setSelected(null) }}><option value="requests">Material requests</option><option value="orders">Purchase orders</option><option value="receipts">Goods receipts</option><option value="issues">Material issues</option></select></label>

@@ -1,3 +1,4 @@
+import Icon from './ui/Icon'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
@@ -329,6 +330,7 @@ export default function MaterialIssuesPage() {
   return (
     <>
       <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="issues" /></span>
         <h1>Material Issues</h1>
         <p>Record materials issued for construction work.</p>
       </header>

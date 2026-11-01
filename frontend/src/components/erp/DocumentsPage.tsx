@@ -1,3 +1,4 @@
+import Icon from '../ui/Icon'
 import { useRef, useState } from 'react'
 import type { AuthUser } from '../../types/auth'
 import { apiFetch, readApiResponse } from '../../api/apiFetch'
@@ -31,7 +32,8 @@ export default function DocumentsPage({ user }: { user: AuthUser }) {
   const urls: Record<string, string> = { Project: '/api/projects', Request: '/api/material-requests', Order: '/api/purchase-orders', Receipt: '/api/goods-receipts', Issue: '/api/material-issues', Invoice: '/api/supplier-accounts' }
   const resources = useData<Resource[]>(urls[type])
   return <>
-    <header className="page-header"><h1>Documents</h1><p>Attach quotations, delivery notes, invoices, and site photos to project records.</p></header>
+    <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="documents" /></span><h1>Documents</h1><p>Attach quotations, delivery notes, invoices, and site photos to project records.</p></header>
     <Feedback error={command.error || resources.error} message={command.message} />
     <section className="panel"><div className="form-grid">
       <label>Record type<select value={type} onChange={e => { setType(e.target.value); setId('') }} disabled={command.busy}>{Object.keys(urls).filter(t => t !== 'Invoice' || user.roles.some(r => ['Administrator', 'ProcurementOfficer'].includes(r))).map(t => <option key={t}>{t}</option>)}</select></label>

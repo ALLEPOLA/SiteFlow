@@ -1,3 +1,4 @@
+import Icon from '../ui/Icon'
 import { useState } from 'react'
 import type { AuthUser } from '../../types/auth'
 import { send, useCommand, useData } from './ErpUi'
@@ -15,7 +16,8 @@ export default function NotificationsPage({ user, onNavigate }: { user: AuthUser
   const canConfigure = user.roles.some(r => ['Administrator', 'ProcurementOfficer'].includes(r))
   const rows = notifications.data?.filter(n => !unreadOnly || !n.isRead) ?? []
   return <>
-    <header className="page-header"><h1>Notifications</h1><p>Pending approvals, overdue deliveries, low stock, and overdue supplier invoices.</p></header>
+    <header className="page-header">
+        <span className="workspace-page-emblem" aria-hidden="true"><Icon name="notifications" /></span><h1>Notifications</h1><p>Pending approvals, overdue deliveries, low stock, and overdue supplier invoices.</p></header>
     <Feedback error={command.error || notifications.error || materials.error} message={command.message} />
     <section className="panel"><div className="section-toolbar"><h2>{notifications.data?.filter(n => !n.isRead).length ?? 0} unread</h2><button type="button" className="secondary-button" onClick={notifications.refresh}>Refresh</button></div>
       <label className="checkbox-label"><input type="checkbox" checked={unreadOnly} onChange={e => setUnreadOnly(e.target.checked)} />Unread only</label>
