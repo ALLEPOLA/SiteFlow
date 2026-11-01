@@ -57,3 +57,5 @@ Open **Material Planning** to compare upcoming demand and safety stock with reco
 ## Material reservations
 
 Reserve existing stock against approved requests, issue against a hold, or release its unused quantity. Inventory and planning distinguish on-hand, reserved, and available stock. Apply the AddMaterialReservations migration first. See [reservation setup and workflow](docs/MATERIAL_RESERVATIONS.md).
+
+Stores and locations: apply AddStoresAndLocations before using this release. See [setup](docs/STORES_AND_LOCATIONS.md).

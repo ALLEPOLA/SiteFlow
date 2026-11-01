@@ -18,6 +18,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         _http = http;
     }
 
+    public DbSet<Store> Stores => Set<Store>();
+    public DbSet<StorageLocation> StorageLocations => Set<StorageLocation>();
     public DbSet<MaterialReservation> MaterialReservations => Set<MaterialReservation>();
     public DbSet<ProjectAssignment> ProjectAssignments => Set<ProjectAssignment>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
@@ -65,6 +67,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     {
         base.OnModelCreating(modelBuilder);
         ErpConfiguration.Configure(modelBuilder);
+        StorageConfiguration.Configure(modelBuilder);
+        modelBuilder.Entity<Store>().HasQueryFilter(s => Projects.Any(p => p.Id == s.ProjectId));
+        modelBuilder.Entity<StorageLocation>().HasQueryFilter(l => Stores.Any(s => s.Id == l.StoreId));
         modelBuilder.ApplyConfiguration(new MaterialReservationConfiguration());
         modelBuilder.Entity<MaterialReservation>().HasQueryFilter(r => Projects.Any(p => p.Id == r.ProjectId));
         modelBuilder.Entity<MaterialIssueLine>().HasOne(l => l.Reservation).WithMany().HasForeignKey(l => l.ReservationId).OnDelete(DeleteBehavior.Restrict);

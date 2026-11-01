@@ -1,8 +1,12 @@
+import StorageLocationSelect from './ui/StorageLocationSelect'
 import Icon from './ui/Icon'
 import { useEffect, useState } from 'react'
 import { apiFetch, readApiResponse } from '../api/apiFetch'
 
 type StockBalance = {
+  storageLocationId: number
+  storeName: string
+  locationName: string
   projectId: number
   projectCode: string
   projectName: string
@@ -16,6 +20,8 @@ type StockBalance = {
 }
 
 type StockMovement = {
+  storageLocationId: number
+  storageLocationName: string
   id: number
   projectId: number
   projectCode: string
@@ -85,6 +91,7 @@ export default function InventoryPage() {
   const [movements, setMovements] = useState<MovementPage | null>(null)
 
   const [projectId, setProjectId] = useState('')
+  const [storageLocationId, setStorageLocationId] = useState('')
   const [materialId, setMaterialId] = useState('')
   const [page, setPage] = useState(1)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -103,7 +110,7 @@ export default function InventoryPage() {
       setBalanceError('')
 
       try {
-        const response = await apiFetch('/api/inventory/balances', {
+        const response = await apiFetch('/api/inventory/location-balances', {
           signal: controller.signal,
           cache: 'no-store',
         })
@@ -146,6 +153,7 @@ export default function InventoryPage() {
         parameters.set('projectId', projectId)
       }
 
+      if (storageLocationId) parameters.set('storageLocationId', storageLocationId)
       if (materialId) {
         parameters.set('materialId', materialId)
       }
@@ -178,7 +186,7 @@ export default function InventoryPage() {
     void loadMovements()
 
     return () => controller.abort()
-  }, [projectId, materialId, page, refreshKey])
+  }, [projectId, storageLocationId, materialId, page, refreshKey])
 
   const projects = Array.from(
     new Map(
@@ -213,7 +221,7 @@ export default function InventoryPage() {
     const matchesMaterial =
       !materialId || balance.materialId === Number(materialId)
 
-    return matchesProject && matchesMaterial
+    return matchesProject && matchesMaterial && (!storageLocationId || balance.storageLocationId === Number(storageLocationId))
   })
 
   const projectCount = new Set(
@@ -230,6 +238,7 @@ export default function InventoryPage() {
 
   function clearFilters() {
     setProjectId('')
+    setStorageLocationId('')
     setMaterialId('')
     setPage(1)
   }
@@ -241,6 +250,7 @@ export default function InventoryPage() {
 
   function viewMovements(balance: StockBalance) {
     setProjectId(String(balance.projectId))
+    setStorageLocationId(String(balance.storageLocationId))
     setMaterialId(String(balance.materialId))
     setPage(1)
   }
@@ -275,6 +285,7 @@ export default function InventoryPage() {
               disabled={balancesLoading}
               onChange={event => {
                 setProjectId(event.target.value)
+                setStorageLocationId('')
                 setPage(1)
               }}
             >
@@ -288,6 +299,7 @@ export default function InventoryPage() {
             </select>
           </label>
 
+          <StorageLocationSelect projectId={projectId} value={storageLocationId} onChange={value => { setStorageLocationId(value); setPage(1) }} optional label="Store / location" />
           <label>
             Material
             <select
@@ -337,7 +349,7 @@ export default function InventoryPage() {
           </div>
 
           <div className="panel">
-            <span>Project/material balances</span>
+            <span>Location/material balances</span>
             <strong>{filteredBalances.length}</strong>
           </div>
         </div>
@@ -360,7 +372,7 @@ export default function InventoryPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Project</th>
+                  <th>Project</th><th>Store / location</th>
                   <th>Material code</th>
                   <th>Material</th>
                   <th>Unit</th>
@@ -372,13 +384,14 @@ export default function InventoryPage() {
               <tbody>
                 {filteredBalances.map(balance => (
                   <tr
-                    key={`${balance.projectId}-${balance.materialId}`}
+                    key={`${balance.storageLocationId}-${balance.materialId}`}
                   >
                     <td>
                       <strong>{balance.projectCode}</strong>
                       <br />
                       {balance.projectName}
                     </td>
+                    <td>{balance.storeName} / {balance.locationName}</td>
 
                     <td>{balance.materialCode}</td>
                     <td>{balance.materialName}</td>
@@ -425,7 +438,7 @@ export default function InventoryPage() {
                 <thead>
                   <tr>
                     <th>Date</th>
-                    <th>Project</th>
+                    <th>Project</th><th>Store / location</th>
                     <th>Material</th>
                     <th>Type</th>
                     <th>Quantity change</th>
@@ -446,6 +459,7 @@ export default function InventoryPage() {
                         <br />
                         {movement.projectName}
                       </td>
+                      <td>{movement.storageLocationName}</td>
 
                       <td>
                         <strong>{movement.materialCode}</strong>

@@ -28,11 +28,11 @@ public class ReportsController(AppDbContext db) : ControllerBase
         }
         else if (kind == "stock")
         {
-            rows.Add(new[] { "Project", "Material", "Date", "Type", "Quantity", "Unit cost LKR", "Receipt line", "Issue line", "Operation", "Reverses movement" });
+            rows.Add(new[] { "Project", "Store / location", "Material", "Date", "Type", "Quantity", "Unit cost LKR", "Receipt line", "Issue line", "Operation", "Reverses movement" });
             var movements = await db.StockMovements.AsNoTracking().Where(m => !projectId.HasValue || m.ProjectId == projectId)
                 .OrderBy(m => m.MovementDate).ThenBy(m => m.Id)
-                .Select(m => new { project = m.Project.Name, material = m.Material.Name, m.MovementDate, m.MovementType, m.Quantity, m.UnitCost, m.GoodsReceiptLineId, m.MaterialIssueLineId, m.InventoryOperationId, m.ReversesMovementId }).ToListAsync();
-            rows.AddRange(movements.Select(m => new[] { m.project, m.material, m.MovementDate.ToString("yyyy-MM-dd"), m.MovementType, m.Quantity.ToString(CultureInfo.InvariantCulture), N(m.UnitCost), m.GoodsReceiptLineId?.ToString() ?? "", m.MaterialIssueLineId?.ToString() ?? "", m.InventoryOperationId?.ToString() ?? "", m.ReversesMovementId?.ToString() ?? "" }));
+                .Select(m => new { project = m.Project.Name, location = m.StorageLocation.Store.Code + " / " + m.StorageLocation.Code, material = m.Material.Name, m.MovementDate, m.MovementType, m.Quantity, m.UnitCost, m.GoodsReceiptLineId, m.MaterialIssueLineId, m.InventoryOperationId, m.ReversesMovementId }).ToListAsync();
+            rows.AddRange(movements.Select(m => new[] { m.project, m.location, m.material, m.MovementDate.ToString("yyyy-MM-dd"), m.MovementType, m.Quantity.ToString(CultureInfo.InvariantCulture), N(m.UnitCost), m.GoodsReceiptLineId?.ToString() ?? "", m.MaterialIssueLineId?.ToString() ?? "", m.InventoryOperationId?.ToString() ?? "", m.ReversesMovementId?.ToString() ?? "" }));
         }
         else if (kind == "costs")
         {

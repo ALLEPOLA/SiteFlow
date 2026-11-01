@@ -28,6 +28,7 @@ public class GoodsReceiptsController : ControllerBase
     {
         return _context.GoodsReceipts
             .AsNoTracking()
+            .Include(r => r.StorageLocation).ThenInclude(l => l.Store)
             .Include(r => r.CreatedByUser)
             .Include(r => r.PurchaseOrder)
                 .ThenInclude(p => p.Supplier)
@@ -149,6 +150,7 @@ public class GoodsReceiptsController : ControllerBase
                 result.Add(new ReceivableOrderResponse
                 {
                     Id = order.Id,
+                    ProjectId = order.MaterialRequest.ProjectId,
                     OrderNumber = $"PO-{order.Id:D6}",
                     ProjectName = order.MaterialRequest.Project.Name,
                     SupplierName = order.Supplier.Name,
@@ -308,6 +310,9 @@ public class GoodsReceiptsController : ControllerBase
             return ReplayResult(existing, dto, userId);
         }
 
+        var location = await StorageRules.Resolve(_context, projectId, dto.StorageLocationId, cancellationToken);
+        if (location is null) return BadRequest(new { message = "Choose an active storage location in the receiving project." });
+
         if (order.Status != "Issued" &&
             order.Status != "PartiallyReceived")
         {
@@ -381,7 +386,7 @@ public class GoodsReceiptsController : ControllerBase
 
         var materialIds = dto.Lines.Select(l => orderLines[l.PurchaseOrderLineId].MaterialRequestLine.MaterialId).ToList();
         var latestDates = await _context.StockMovements
-            .Where(m => m.ProjectId == projectId && materialIds.Contains(m.MaterialId))
+            .Where(m => m.ProjectId == projectId && m.StorageLocationId == location.Id && materialIds.Contains(m.MaterialId))
             .GroupBy(m => m.MaterialId).Select(g => g.Max(m => m.MovementDate))
             .ToListAsync(cancellationToken);
         if (latestDates.Any(date => dto.ReceivedDate < date))
@@ -391,6 +396,7 @@ public class GoodsReceiptsController : ControllerBase
         {
             ClientRequestId = requestKey,
             PurchaseOrderId = order.Id,
+            StorageLocationId = location.Id,
             ReceivedDate = dto.ReceivedDate,
             DeliveryNoteNumber = dto.DeliveryNoteNumber.Trim(),
             Notes = dto.Notes?.Trim() ?? string.Empty,
@@ -482,6 +488,7 @@ public class GoodsReceiptsController : ControllerBase
         string userId)
     {
         var sameHeader =
+            StorageRules.Matches(dto.StorageLocationId, existing.StorageLocation) &&
             existing.CreatedByUserId == userId &&
             existing.PurchaseOrderId == dto.PurchaseOrderId &&
             existing.ReceivedDate == dto.ReceivedDate &&
@@ -541,6 +548,8 @@ public class GoodsReceiptsController : ControllerBase
         return new GoodsReceiptResponse
         {
             ProjectId = receipt.PurchaseOrder.MaterialRequest.ProjectId,
+            StorageLocationId = receipt.StorageLocationId,
+            StorageLocationName = receipt.StorageLocation.Store.Code + " / " + receipt.StorageLocation.Code,
             Id = receipt.Id,
             ReceiptNumber = $"GR-{receipt.Id:D6}",
             ClientRequestId = receipt.ClientRequestId,

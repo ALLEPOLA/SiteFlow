@@ -28,6 +28,7 @@ public static class ReceiptStockPosting
             .Select(line => new
             {
                 ReceiptLineId = line.Id,
+                line.GoodsReceipt.StorageLocationId,
 
                 ProjectId = line.GoodsReceipt.PurchaseOrder
                     .MaterialRequest.ProjectId,
@@ -53,6 +54,7 @@ public static class ReceiptStockPosting
             context.StockMovements.Add(new StockMovement
             {
                 ProjectId = line.ProjectId,
+                StorageLocationId = line.StorageLocationId,
                 MaterialId = line.MaterialId,
                 MovementType = "Receipt",
                 Quantity = line.Quantity,

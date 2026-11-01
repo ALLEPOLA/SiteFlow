@@ -9,6 +9,7 @@ public class WorkspacePermissionFilter : IAsyncActionFilter
 {
     private static readonly IReadOnlyDictionary<string, string> Features = new Dictionary<string, string>
     {
+        ["Stores"] = "stores",
         ["MaterialReservations"] = "reservations",
         ["Dashboard"] = "dashboard", ["ProjectCosts"] = "costs", ["MaterialPlanning"] = "planning",
         ["MaterialRequests"] = "requests", ["PurchaseOrders"] = "orders",

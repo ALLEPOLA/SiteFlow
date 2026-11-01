@@ -1,6 +1,7 @@
 type Props = { name: string; className?: string }
 
 const paths: Record<string, string> = {
+  stores: 'M3 10h18v11H3z M2 10l3-7h14l3 7 M7 14h4v7H7z M15 14h3 M15 18h3 M7 6h10',
   reservations: 'M4 10h16v11H4z M3 10l3-6h12l3 6 M9 10V7a3 3 0 0 1 6 0v3 M9 15l2 2 4-4',
   planning: 'M4 4h16v17H4z M8 2v4 M16 2v4 M4 9h16 M8 13h3 M8 17h3 M14 15l2 2 4-5',
   dashboard: 'M3 3h7v7H3z M14 3h7v4h-7z M14 11h7v10h-7z M3 14h7v7H3z',

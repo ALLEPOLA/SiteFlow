@@ -1,3 +1,4 @@
+import StorageLocationSelect from './ui/StorageLocationSelect'
 import Icon from './ui/Icon'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -16,6 +17,7 @@ type ReceivableLine = {
 }
 
 type ReceivableOrder = {
+  projectId: number
   id: number
   orderNumber: string
   projectName: string
@@ -37,6 +39,8 @@ type ReceiptLine = {
 }
 
 type GoodsReceipt = {
+  storageLocationId: number
+  storageLocationName: string
   id: number
   receiptNumber: string
   clientRequestId: string
@@ -98,6 +102,7 @@ export default function GoodsReceiptsPage() {
   const [success, setSuccess] = useState('')
 
   const [orderId, setOrderId] = useState('')
+  const [storageLocationId, setStorageLocationId] = useState('')
   const [receivedDate, setReceivedDate] = useState(localToday)
   const [deliveryNoteNumber, setDeliveryNoteNumber] = useState('')
   const [notes, setNotes] = useState('')
@@ -192,6 +197,7 @@ export default function GoodsReceiptsPage() {
 
   function changeOrder(value: string) {
     setOrderId(value)
+    setStorageLocationId('')
 
     const order = orders.find(item => item.id === Number(value))
 
@@ -225,6 +231,8 @@ export default function GoodsReceiptsPage() {
       setError('Select a purchase order.')
       return
     }
+
+    if (!storageLocationId) { setError('Choose the receiving storage location.'); return }
 
     if (!deliveryNoteNumber.trim()) {
       setError('Enter the supplier delivery note number.')
@@ -279,6 +287,7 @@ export default function GoodsReceiptsPage() {
     const payload = {
       clientRequestId: submissionId.current,
       purchaseOrderId: selectedOrder.id,
+      storageLocationId: Number(storageLocationId),
       receivedDate,
       deliveryNoteNumber: deliveryNoteNumber.trim(),
       notes: notes.trim(),
@@ -312,6 +321,7 @@ export default function GoodsReceiptsPage() {
       submissionId.current = crypto.randomUUID()
 
       setOrderId('')
+      setStorageLocationId('')
       setReceivedDate(localToday())
       setDeliveryNoteNumber('')
       setNotes('')
@@ -394,6 +404,7 @@ export default function GoodsReceiptsPage() {
                     </select>
                   </label>
 
+                  <StorageLocationSelect projectId={selectedOrder?.projectId} value={storageLocationId} onChange={setStorageLocationId} label="Receive into store / location" />
                   <label>
                     Received date
                     <input
@@ -545,7 +556,7 @@ export default function GoodsReceiptsPage() {
               <tbody>
                 {receipts.map(receipt => (
                   <tr key={receipt.id}>
-                    <td>{receipt.receiptNumber}</td>
+                    <td>{receipt.receiptNumber}<br /><small>{receipt.storageLocationName}</small></td>
                     <td>{receipt.orderNumber}</td>
                     <td>{receipt.supplierName}</td>
                     <td>{receipt.receivedDate}</td>
@@ -588,7 +599,7 @@ export default function GoodsReceiptsPage() {
             {selectedReceipt.orderNumber}
           </p>
           <p>
-            <strong>Project:</strong> {selectedReceipt.projectName}
+            <strong>Project:</strong> {selectedReceipt.projectName} / {selectedReceipt.storageLocationName}
           </p>
           <p>
             <strong>Supplier:</strong> {selectedReceipt.supplierName}

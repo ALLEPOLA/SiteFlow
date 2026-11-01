@@ -91,6 +91,21 @@ await CheckWorkspaceFilter("SiteEngineer", "Reports", false, "orders");
 await CheckWorkspaceFilter("SiteEngineer", "Reports", true, "stock");
 await CheckWorkspaceFilter("ProjectManager", "Reports", true, "costs");
 
+// Locations retain project totals while separating custody and availability.
+var defaultStore = StorageRules.DefaultStore(new SiteFlow.API.Models.Project { Id = 55 });
+Check(defaultStore.Code == "MAIN" && defaultStore.Locations.Single().Code == "DEFAULT", "New projects start with a system default store and location");
+var mainLocation = new SiteFlow.API.Models.StorageLocation { Id = 10, Code = "DEFAULT", Store = new SiteFlow.API.Models.Store { Code = "MAIN" } };
+var rackLocation = new SiteFlow.API.Models.StorageLocation { Id = 11, Code = "A01", Store = new SiteFlow.API.Models.Store { Code = "SITEB" } };
+Check(StorageRules.Matches(null, mainLocation) && !StorageRules.Matches(null, rackLocation) &&
+    StorageRules.Matches(11, rackLocation) && !StorageRules.Matches(10, rackLocation), "Legacy omitted-location retries match only the system default");
+Check(StorageRules.SameEndpoint(1, 10, 1, 10) && !StorageRules.SameEndpoint(1, 10, 1, 11) &&
+    !StorageRules.SameEndpoint(1, 10, 2, 12), "Transfers permit different locations in the same or another project");
+Check(ReservationRules.Available(6, 5) == 1 && ReservationRules.Available(4, 0) == 4,
+    "Reservations protect their own location without consuming another location's stock");
+await CheckWorkspaceFilter("SiteEngineer", "Stores", true);
+await CheckWorkspaceFilter("Storekeeper", "Stores", true);
+await CheckWorkspaceFilter("Unknown", "Stores", false);
+
 // Reservation arithmetic guards every outbound stock path.
 Check(ReservationRules.Available(100, 70) == 30 && ReservationRules.Available(5, 7) == 0, "Reservations reduce available stock without negative free quantities");
 Check(ReservationRules.Remaining(100, 20, 30) == 50, "Partial issue and release reconcile remaining holds");
@@ -140,6 +155,8 @@ using (var scoped = new AppDbContext(options, http))
 {
     var queries = new[] {
         scoped.Projects.Select(p => p.Id).ToQueryString(),
+        scoped.Stores.Select(s => s.Id).ToQueryString(),
+        scoped.StorageLocations.Select(l => l.Id).ToQueryString(),
         scoped.MaterialRequests.Select(p => p.Id).ToQueryString(),
         scoped.PurchaseOrders.Select(p => p.Id).ToQueryString(),
         scoped.GoodsReceiptLines.Select(p => p.Id).ToQueryString(),
@@ -157,6 +174,7 @@ if (args.Contains("--offline"))
     var script = configured.GetService<IMigrator>().GenerateScript();
     Check(script.Contains("CREATE TABLE `InventoryOperations`") && script.Contains("CREATE TABLE `SupplierInvoices`") && script.Contains("CREATE TABLE `AuditEntries`"), "MySQL migration script includes ERP tables");
     Check(script.Contains("CREATE TABLE `MaterialReservations`") && script.Contains("CK_MaterialReservations_Quantities") && script.Contains("IX_MaterialReservations_ClientRequestId"), "Migration contains reservation integrity checks and replay protection");
+    Check(script.Contains("CREATE TABLE `StorageLocations`") && script.Contains("INSERT INTO `Stores`") && script.Contains("UPDATE `StockMovements` t JOIN"), "Location migration backfills existing project stock before foreign keys");
     Check(!configured.Database.HasPendingModelChanges(), "Migration snapshot matches the current data model");
     Console.WriteLine($"ALL {checks} OFFLINE CHECKS PASSED. Database integration checks require a disposable test database.");
     return;
@@ -230,6 +248,18 @@ try
     var material2 = await Request(admin, "POST", "/api/materials", new { code = "TESTMAT2", name = "Test steel", category = "Test", unit = "kg" }, 201);
     var supplier = await Request(admin, "POST", "/api/suppliers", new { code = "TESTSUP", name = "Test supplier" }, 201);
     var p = Id(project); var p2 = Id(project2); var m = Id(material); var m2 = Id(material2); var s = Id(supplier);
+    var defaultLocations = await Request(admin, "GET", $"/api/stores/locations?projectId={p}");
+    var mainLocationId = Id(defaultLocations.AsArray().Single()!);
+    var otherLocations = await Request(admin, "GET", $"/api/stores/locations?projectId={p2}");
+    var otherLocationId = Id(otherLocations.AsArray().Single()!);
+    var addedStore = await Request(admin, "POST", "/api/stores", new { projectId = p, code = "SITEB", name = "Site B Store" }, 201);
+    var rackLocationRecord = await Request(admin, "POST", "/api/stores/locations", new { storeId = Id(addedStore), code = "A01", name = "Cement Rack A", rack = "A", bin = "01" }, 201);
+    var rackLocationId = Id(rackLocationRecord);
+    await Request(admin, "POST", "/api/stores", new { projectId = p, code = "SITEB", name = "Duplicate" }, 409);
+    await Request(admin, "POST", "/api/stores/locations", new { storeId = Id(addedStore), code = "A01", name = "Duplicate", rack = "", bin = "" }, 409);
+    await Request(admin, "PUT", $"/api/stores/{defaultLocations[0]!["storeId"]!.GetValue<int>()}", new { name = "Main Store", isActive = false }, 409);
+    Check(defaultLocations.AsArray().Count == 1 && otherLocations.AsArray().Count == 1, "Project creation includes a default store location");
+
     var staff = await Request(admin, "POST", "/api/users", new { fullName = "Engineer", email = "engineer@siteflow-tests.invalid", password, role = "SiteEngineer" }, 201);
     var userId = staff["id"]!.GetValue<string>();
     using var engineer = Client();
@@ -342,6 +372,48 @@ try
     var releasedBalances = await Request(engineer, "GET", "/api/inventory/balances");
     Check(releasedBalances.AsArray().Single(b => b!["projectId"]!.GetValue<int>() == p && b["materialId"]!.GetValue<int>() == m)!["availableQuantity"]!.GetValue<decimal>() == 10,
         "Release and creation retries cannot accidentally reactivate a closed hold");
+
+    // Location posting and transfer validation keep the project total unchanged.
+    await Request(engineer, "POST", "/api/stores", new { projectId = p, code = "DENIED", name = "Denied" }, 403);
+    Check((await Request(engineer, "GET", $"/api/stores/locations?projectId={p2}")).AsArray().Count == 0, "Locations respect project assignments");
+    await Request(engineer, "POST", "/api/material-reservations", new { clientRequestId = Guid.NewGuid(), materialRequestId = r, materialId = m, quantity = 1, storageLocationId = otherLocationId, reason = "Wrong project location" }, 400);
+    var locationTransferBody = new { clientRequestId = Guid.NewGuid(), projectId = p, destinationProjectId = p, storageLocationId = mainLocationId, destinationStorageLocationId = rackLocationId,
+        materialId = m, kind = "Transfer", quantity = 4, unitCost = 0, date = day, reason = "Move to Rack A" };
+    await Request(admin, "POST", "/api/inventory-operations", new { clientRequestId = Guid.NewGuid(), projectId = p, destinationProjectId = p, storageLocationId = mainLocationId, destinationStorageLocationId = mainLocationId, materialId = m, kind = "Transfer", quantity = 1, unitCost = 0, date = day, reason = "Same endpoint" }, 400);
+    var locationTransfer = await Request(admin, "POST", "/api/inventory-operations", locationTransferBody);
+    await Request(admin, "POST", "/api/inventory-operations", locationTransferBody);
+    var locationRows = await Request(admin, "GET", $"/api/inventory/location-balances?projectId={p}&materialId={m}");
+    Check(locationRows.AsArray().Single(b => b!["storageLocationId"]!.GetValue<int>() == mainLocationId)!["quantityOnHand"]!.GetValue<decimal>() == 6 &&
+        locationRows.AsArray().Single(b => b!["storageLocationId"]!.GetValue<int>() == rackLocationId)!["quantityOnHand"]!.GetValue<decimal>() == 4,
+        "Same-project transfers and retries reconcile location balances");
+    var projectRows = await Request(admin, "GET", $"/api/inventory/balances?projectId={p}&materialId={m}");
+    Check(projectRows[0]!["quantityOnHand"]!.GetValue<decimal>() == 10, "Location transfers preserve project totals");
+    var locationPlan = await Request(engineer, "POST", "/api/material-planning/analyze", new { projectId = p, storageLocationId = rackLocationId, requiredDate = planningDate,
+        lines = new[] { new { materialId = m, quantity = 8, estimatedUnitPrice = 10 } } });
+    Check(locationPlan["lines"]![0]!["stock"]!.GetValue<decimal>() == 4 && locationPlan["lines"]![0]!["shortage"]!.GetValue<decimal>() == 4,
+        "Location planning excludes stock in other stores");
+    await Request(admin, "POST", "/api/material-issues", new { clientRequestId = Guid.NewGuid(), projectId = p, storageLocationId = mainLocationId, issueDate = day, purpose = "Cannot use another rack", receivedBy = "Test", lines = new[] { new { materialId = m, quantity = 7 } } }, 409);
+    var rackHold = await Request(engineer, "POST", "/api/material-reservations", new { clientRequestId = Guid.NewGuid(), materialRequestId = r, storageLocationId = rackLocationId, materialId = m, quantity = 3, reason = "Rack work" }, 201);
+    await Request(admin, "POST", "/api/material-issues", new { clientRequestId = Guid.NewGuid(), projectId = p, storageLocationId = mainLocationId, issueDate = day, purpose = "Wrong reservation location", receivedBy = "Test", lines = new[] { new { materialId = m, quantity = 1, reservationId = Id(rackHold) } } }, 409);
+    await Request(admin, "POST", "/api/material-issues", new { clientRequestId = Guid.NewGuid(), projectId = p, storageLocationId = rackLocationId, issueDate = day, purpose = "Protected local hold", receivedBy = "Test", lines = new[] { new { materialId = m, quantity = 2 } } }, 409);
+    await Request(admin, "PUT", $"/api/stores/locations/{rackLocationId}", new { name = "Cement Rack A", rack = "A", bin = "01", isActive = false }, 409);
+    await Request(admin, "PUT", $"/api/stores/{Id(addedStore)}", new { name = "Site B Store", isActive = false }, 409);
+    var rackIssue = await Request(admin, "POST", "/api/material-issues", new { clientRequestId = Guid.NewGuid(), projectId = p, storageLocationId = rackLocationId, issueDate = day, purpose = "Rack work", receivedBy = "Test", lines = new[] { new { materialId = m, quantity = 2, reservationId = Id(rackHold) } } }, 201);
+    Check(rackIssue["storageLocationId"]!.GetValue<int>() == rackLocationId, "Issues retain the selected storage location");
+    await Request(admin, "POST", $"/api/corrections/issues/{Id(rackIssue)}/reverse", new { reason = "Restore rack hold" });
+    await Request(engineer, "POST", $"/api/material-reservations/{Id(rackHold)}/release", new { reason = "Release rack hold" });
+    await Request(admin, "POST", $"/api/inventory-operations/{Id(locationTransfer)}/reverse", new { reason = "Restore Main Store stock" });
+    await Request(admin, "PUT", $"/api/stores/{Id(addedStore)}", new { name = "Site B Store", isActive = false });
+    await Request(admin, "POST", "/api/inventory-operations", new { clientRequestId = Guid.NewGuid(), projectId = p, storageLocationId = rackLocationId, materialId = m, kind = "Adjustment", quantity = 1, unitCost = 10, date = day, reason = "Inactive store" }, 400);
+    await Request(admin, "PUT", $"/api/stores/{Id(addedStore)}", new { name = "Site B Store", isActive = true });
+    await Request(admin, "PUT", $"/api/stores/locations/{rackLocationId}", new { name = "Cement Rack A", rack = "A", bin = "01", isActive = false });
+    await Request(admin, "POST", "/api/inventory-operations", new { clientRequestId = Guid.NewGuid(), projectId = p, storageLocationId = rackLocationId, materialId = m, kind = "Adjustment", quantity = 1, unitCost = 10, date = day, reason = "Inactive location" }, 400);
+    await Request(admin, "PUT", $"/api/stores/locations/{rackLocationId}", new { name = "Cement Rack A", rack = "A", bin = "01", isActive = true });
+    var rackReceipt = await Request(admin, "POST", "/api/goods-receipts", new { clientRequestId = Guid.NewGuid(), purchaseOrderId = o, storageLocationId = rackLocationId, receivedDate = day, deliveryNoteNumber = "RACK-TEST",
+        lines = new[] { new { purchaseOrderLineId = ol2, quantity = 1 } } }, 201);
+    Check(rackReceipt["storageLocationId"]!.GetValue<int>() == rackLocationId, "Receipts retain the selected storage location");
+    await Request(admin, "POST", "/api/inventory-operations", new { clientRequestId = Guid.NewGuid(), projectId = p, storageLocationId = mainLocationId, materialId = m2, kind = "SupplierReturn", quantity = 1, unitCost = 0, goodsReceiptLineId = rackReceipt["lines"]![0]!["id"]!.GetValue<int>(), date = day, reason = "Wrong return location" }, 400);
+    await Request(admin, "POST", $"/api/corrections/receipts/{Id(rackReceipt)}/reverse", new { reason = "Undo rack test delivery" });
 
     var receipt2 = await Request(admin, "POST", "/api/goods-receipts", new { clientRequestId = Guid.NewGuid(), purchaseOrderId = o, receivedDate = day, deliveryNoteNumber = "TEST2", lines = new[] { new { purchaseOrderLineId = ol2, quantity = 10 } } }, 201);
     var gr = Id(receipt); var gr2 = Id(receipt2);

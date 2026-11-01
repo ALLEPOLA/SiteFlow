@@ -15,9 +15,9 @@ public static class OperationRules
         return projects.Any(p => p.Status == "Active");
     }
 
-    public static async Task<(decimal Quantity, decimal Cost, DateOnly Latest)> Stock(AppDbContext db, int projectId, int materialId)
+    public static async Task<(decimal Quantity, decimal Cost, DateOnly Latest)> Stock(AppDbContext db, int projectId, int materialId, int? storageLocationId = null)
     {
-        var rows = await db.StockMovements.Where(m => m.ProjectId == projectId && m.MaterialId == materialId)
+        var rows = await db.StockMovements.Where(m => m.ProjectId == projectId && m.MaterialId == materialId && (!storageLocationId.HasValue || m.StorageLocationId == storageLocationId))
             .Select(m => new { m.Quantity, m.UnitCost, m.MovementDate }).ToListAsync();
         var quantity = rows.Sum(m => m.Quantity);
         var value = rows.Sum(m => m.Quantity * m.UnitCost);
@@ -25,9 +25,9 @@ public static class OperationRules
         return (quantity, cost, rows.Count > 0 ? rows.Max(m => m.MovementDate) : DateOnly.MinValue);
     }
 
-    public static StockMovement Movement(AppDbContext db, int project, int material, string type, decimal quantity, decimal cost, DateOnly date) => new()
+    public static StockMovement Movement(AppDbContext db, int project, int material, string type, decimal quantity, decimal cost, DateOnly date, int storageLocationId) => new()
     {
-        ProjectId = project, MaterialId = material, MovementType = type,
+        StorageLocationId = storageLocationId, ProjectId = project, MaterialId = material, MovementType = type,
         Quantity = quantity, UnitCost = cost, MovementDate = date,
         CreatedByUserId = db.CurrentUserId, CreatedAtUtc = DateTime.UtcNow
     };

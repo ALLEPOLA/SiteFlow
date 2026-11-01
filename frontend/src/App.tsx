@@ -1,3 +1,4 @@
+import StoresPage from './components/erp/StoresPage'
 import MaterialReservationsPage from './components/erp/MaterialReservationsPage'
 import { canAccessPage } from './security/permissions'
 import type { WorkspacePage } from './security/permissions'
@@ -48,6 +49,7 @@ const navigation: {
   { page: 'receipts', label: 'Goods Receipts' },
   { page: 'inventory', label: 'Inventory' },
   { page: 'reservations', label: 'Reservations' },
+  { page: 'stores', label: 'Stores & Locations' },
   { page: 'issues', label: 'Material Issues' },
   { page: 'corrections', label: 'Corrections' },
   { page: 'stock-operations', label: 'Stock Operations', roles: ['Administrator', 'Storekeeper'] },
@@ -228,7 +230,7 @@ function App() {
   const groups = [
     { label: 'Workspace', pages: ['dashboard', 'projects', 'costs'] },
     { label: 'Materials & purchasing', pages: ['materials', 'suppliers', 'planning', 'requests', 'orders', 'receipts'] },
-    { label: 'Stock & finance', pages: ['inventory', 'reservations', 'issues', 'stock-operations', 'accounts', 'corrections'] },
+    { label: 'Stock & finance', pages: ['inventory', 'stores', 'reservations', 'issues', 'stock-operations', 'accounts', 'corrections'] },
     { label: 'Tools & administration', pages: ['documents', 'notifications', 'reports', 'audit', 'users', 'profile'] },
   ]
   const currentLabel = user.mustChangePassword ? 'My Profile' : navigation.find(item => item.page === page)?.label
@@ -305,6 +307,7 @@ function App() {
           {page === 'receipts' && <GoodsReceiptsPage />}
           {page === 'inventory' && <InventoryPage />}
           {page === 'reservations' && <MaterialReservationsPage user={user} />}
+          {page === 'stores' && <StoresPage user={user} />}
           {page === 'issues' && <MaterialIssuesPage />}
           {page === 'corrections' && <CorrectionsPage user={user} />}
           {page === 'stock-operations' && user.roles.some(role => ['Administrator', 'Storekeeper'].includes(role)) && <StockOperationsPage />}

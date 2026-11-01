@@ -14,17 +14,17 @@ namespace SiteFlow.API.Controllers;
 public class MaterialReservationsController(AppDbContext db) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int? projectId, [FromQuery] bool activeOnly = true, CancellationToken ct = default)
+    public async Task<IActionResult> List([FromQuery] int? projectId, [FromQuery] bool activeOnly = true, [FromQuery] int? storageLocationId = null, CancellationToken ct = default)
     {
         Response.Headers["Cache-Control"] = "no-store";
-        if (projectId is <= 0) return BadRequest();
+        if (projectId is <= 0 || storageLocationId is <= 0) return BadRequest();
         var canManage = User.IsInRole("Administrator") || User.IsInRole("ProjectManager");
         var mayRelease = canManage || User.IsInRole("SiteEngineer");
-        var query = db.MaterialReservations.AsNoTracking().Where(r => !projectId.HasValue || r.ProjectId == projectId);
+        var query = db.MaterialReservations.AsNoTracking().Where(r => !projectId.HasValue || r.ProjectId == projectId).Where(r => !storageLocationId.HasValue || r.StorageLocationId == storageLocationId);
         if (activeOnly) query = query.Where(r => r.Quantity > r.ConsumedQuantity + r.ReleasedQuantity);
         return Ok(await query.OrderByDescending(r => r.Id).Take(500).Select(r => new
         {
-            r.Id, r.ProjectId, projectName = r.Project.Name, r.MaterialRequestId,
+            r.Id, r.StorageLocationId, storageLocationName = r.StorageLocation.Store.Code + " / " + r.StorageLocation.Code, r.ProjectId, projectName = r.Project.Name, r.MaterialRequestId,
             requestNumber = "MR-" + r.MaterialRequestId.ToString().PadLeft(6, '0'),
             r.MaterialId, materialCode = r.Material.Code, materialName = r.Material.Name, r.Material.Unit,
             r.Quantity, r.ConsumedQuantity, r.ReleasedQuantity,
@@ -67,10 +67,10 @@ public class MaterialReservationsController(AppDbContext db) : ControllerBase
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
         if (!await OperationRules.LockProject(db, info.ProjectId))
             return BadRequest(new { message = "Project must be active and assigned to you." });
-        var replay = await db.MaterialReservations.SingleOrDefaultAsync(r => r.ClientRequestId == requestKey, ct);
+        var replay = await db.MaterialReservations.Include(r => r.StorageLocation).ThenInclude(l => l.Store).SingleOrDefaultAsync(r => r.ClientRequestId == requestKey, ct);
         if (replay is not null)
         {
-            if (replay.CreatedByUserId != db.CurrentUserId || replay.MaterialRequestId != dto.MaterialRequestId ||
+            if (!StorageRules.Matches(dto.StorageLocationId, replay.StorageLocation) || replay.CreatedByUserId != db.CurrentUserId || replay.MaterialRequestId != dto.MaterialRequestId ||
                 replay.MaterialId != dto.MaterialId || replay.Quantity != dto.Quantity || replay.Reason != dto.Reason.Trim())
                 return Conflict(new { message = "Submission ID already used for different reservation data." });
             return Ok(new { replay.Id, message = "Reservation already recorded." });
@@ -86,14 +86,16 @@ public class MaterialReservationsController(AppDbContext db) : ControllerBase
             .SumAsync(r => (decimal?)(r.Quantity - r.ReleasedQuantity), ct) ?? 0;
         if (dto.Quantity > line.Quantity - allocated)
             return Conflict(new { message = "Quantity exceeds the approved amount not already reserved or consumed." });
-        var stock = await OperationRules.Stock(db, info.ProjectId, dto.MaterialId);
-        var held = await ReservationRules.Held(db, info.ProjectId, dto.MaterialId, ct);
+        var location = await StorageRules.Resolve(db, info.ProjectId, dto.StorageLocationId, ct);
+        if (location is null) return BadRequest(new { message = "Choose an active location in the request project." });
+        var stock = await OperationRules.Stock(db, info.ProjectId, dto.MaterialId, location.Id);
+        var held = await ReservationRules.Held(db, info.ProjectId, dto.MaterialId, ct, location.Id);
         if (dto.Quantity > ReservationRules.Available(stock.Quantity, held))
             return Conflict(new { message = $"Only {ReservationRules.Available(stock.Quantity, held)} unreserved units are available. Receive stock or release another hold first." });
         var reservation = new MaterialReservation
         {
             ClientRequestId = requestKey, ProjectId = info.ProjectId, MaterialRequestId = request.Id,
-            MaterialId = dto.MaterialId, Quantity = dto.Quantity, Reason = dto.Reason.Trim(),
+            StorageLocationId = location.Id, MaterialId = dto.MaterialId, Quantity = dto.Quantity, Reason = dto.Reason.Trim(),
             CreatedByUserId = db.CurrentUserId
         };
         db.MaterialReservations.Add(reservation);
@@ -127,6 +129,7 @@ public class MaterialReservationsController(AppDbContext db) : ControllerBase
 }
 public class ReserveMaterialDto : ReasonDto
 {
+    [Range(1, int.MaxValue)] public int? StorageLocationId { get; set; }
     [Required, StringLength(36)] public string ClientRequestId { get; set; } = "";
     [Range(1, int.MaxValue)] public int MaterialRequestId { get; set; }
     [Range(1, int.MaxValue)] public int MaterialId { get; set; }

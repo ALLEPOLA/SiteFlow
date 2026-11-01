@@ -366,6 +366,9 @@ namespace SiteFlow.API.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)");
 
+                    b.Property<int>("StorageLocationId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClientRequestId")
@@ -374,6 +377,8 @@ namespace SiteFlow.API.Migrations
                     b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("PurchaseOrderId");
+
+                    b.HasIndex("StorageLocationId");
 
                     b.ToTable("GoodsReceipts");
                 });
@@ -442,6 +447,9 @@ namespace SiteFlow.API.Migrations
                     b.Property<int?>("DestinationProjectId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("DestinationStorageLocationId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("GoodsReceiptLineId")
                         .HasColumnType("int");
 
@@ -477,6 +485,9 @@ namespace SiteFlow.API.Migrations
                         .HasColumnType("varchar(20)")
                         .HasDefaultValue("Posted");
 
+                    b.Property<int>("StorageLocationId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("UnitCost")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -488,11 +499,15 @@ namespace SiteFlow.API.Migrations
 
                     b.HasIndex("DestinationProjectId");
 
+                    b.HasIndex("DestinationStorageLocationId");
+
                     b.HasIndex("GoodsReceiptLineId");
 
                     b.HasIndex("MaterialId");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("StorageLocationId");
 
                     b.ToTable("InventoryOperations");
                 });
@@ -587,6 +602,9 @@ namespace SiteFlow.API.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)");
 
+                    b.Property<int>("StorageLocationId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClientRequestId")
@@ -595,6 +613,8 @@ namespace SiteFlow.API.Migrations
                     b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("StorageLocationId");
 
                     b.ToTable("MaterialIssues", (string)null);
                 });
@@ -789,6 +809,9 @@ namespace SiteFlow.API.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
+                    b.Property<int>("StorageLocationId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClientRequestId")
@@ -801,6 +824,8 @@ namespace SiteFlow.API.Migrations
                     b.HasIndex("MaterialRequestId");
 
                     b.HasIndex("ProjectId", "MaterialId");
+
+                    b.HasIndex("StorageLocationId", "MaterialId");
 
                     b.ToTable("MaterialReservations", null, t =>
                         {
@@ -1022,6 +1047,9 @@ namespace SiteFlow.API.Migrations
                     b.Property<int?>("ReversesMovementId")
                         .HasColumnType("int");
 
+                    b.Property<int>("StorageLocationId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("UnitCost")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1047,12 +1075,88 @@ namespace SiteFlow.API.Migrations
 
                     b.HasIndex("ProjectId", "MaterialId");
 
+                    b.HasIndex("StorageLocationId", "MaterialId");
+
                     b.ToTable("StockMovements", null, t =>
                         {
                             t.HasCheckConstraint("CK_StockMovements_TypeQuantity", "(\r\n    `MovementType` = 'Receipt'\r\n    AND `Quantity` > 0\r\n    AND `GoodsReceiptLineId` IS NOT NULL\r\n    AND `MaterialIssueLineId` IS NULL\r\n)\r\nOR\r\n(\r\n    `MovementType` IN ('Adjustment', 'Count', 'TransferIn', 'TransferOut', 'SupplierReturn')\r\n    AND `Quantity` <> 0\r\n    AND `InventoryOperationId` IS NOT NULL\r\n    AND `GoodsReceiptLineId` IS NULL\r\n    AND `MaterialIssueLineId` IS NULL\r\n)\r\nOR\r\n(\r\n    `MovementType` = 'Reversal'\r\n    AND `Quantity` <> 0\r\n    AND `ReversesMovementId` IS NOT NULL\r\n    AND `GoodsReceiptLineId` IS NULL\r\n    AND `MaterialIssueLineId` IS NULL\r\n)\r\nOR\r\n(\r\n    `MovementType` = 'Issue'\r\n    AND `Quantity` < 0\r\n    AND `GoodsReceiptLineId` IS NULL\r\n    AND `MaterialIssueLineId` IS NOT NULL\r\n)");
 
                             t.HasCheckConstraint("CK_StockMovements_UnitCost", "`UnitCost` >= 0");
                         });
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.StorageLocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Bin")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<string>("Rack")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<int>("StoreId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoreId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("StorageLocations");
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.Store", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("Stores");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.Supplier", b =>
@@ -1308,9 +1412,17 @@ namespace SiteFlow.API.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SiteFlow.API.Models.StorageLocation", "StorageLocation")
+                        .WithMany()
+                        .HasForeignKey("StorageLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("PurchaseOrder");
+
+                    b.Navigation("StorageLocation");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.GoodsReceiptLine", b =>
@@ -1339,6 +1451,11 @@ namespace SiteFlow.API.Migrations
                         .HasForeignKey("DestinationProjectId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("SiteFlow.API.Models.StorageLocation", "DestinationStorageLocation")
+                        .WithMany()
+                        .HasForeignKey("DestinationStorageLocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SiteFlow.API.Models.GoodsReceiptLine", "GoodsReceiptLine")
                         .WithMany()
                         .HasForeignKey("GoodsReceiptLineId")
@@ -1356,13 +1473,23 @@ namespace SiteFlow.API.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SiteFlow.API.Models.StorageLocation", "StorageLocation")
+                        .WithMany()
+                        .HasForeignKey("StorageLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("DestinationProject");
+
+                    b.Navigation("DestinationStorageLocation");
 
                     b.Navigation("GoodsReceiptLine");
 
                     b.Navigation("Material");
 
                     b.Navigation("Project");
+
+                    b.Navigation("StorageLocation");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.MaterialIssue", b =>
@@ -1379,9 +1506,17 @@ namespace SiteFlow.API.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SiteFlow.API.Models.StorageLocation", "StorageLocation")
+                        .WithMany()
+                        .HasForeignKey("StorageLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("Project");
+
+                    b.Navigation("StorageLocation");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.MaterialIssueLine", b =>
@@ -1480,6 +1615,12 @@ namespace SiteFlow.API.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SiteFlow.API.Models.StorageLocation", "StorageLocation")
+                        .WithMany()
+                        .HasForeignKey("StorageLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("Material");
@@ -1487,6 +1628,8 @@ namespace SiteFlow.API.Migrations
                     b.Navigation("MaterialRequest");
 
                     b.Navigation("Project");
+
+                    b.Navigation("StorageLocation");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.ProjectAssignment", b =>
@@ -1601,6 +1744,12 @@ namespace SiteFlow.API.Migrations
                         .HasForeignKey("ReversesMovementId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("SiteFlow.API.Models.StorageLocation", "StorageLocation")
+                        .WithMany()
+                        .HasForeignKey("StorageLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("GoodsReceiptLine");
@@ -1614,6 +1763,30 @@ namespace SiteFlow.API.Migrations
                     b.Navigation("Project");
 
                     b.Navigation("ReversesMovement");
+
+                    b.Navigation("StorageLocation");
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.StorageLocation", b =>
+                {
+                    b.HasOne("SiteFlow.API.Models.Store", "Store")
+                        .WithMany("Locations")
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.Store", b =>
+                {
+                    b.HasOne("SiteFlow.API.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.SupplierInvoice", b =>
@@ -1675,6 +1848,11 @@ namespace SiteFlow.API.Migrations
             modelBuilder.Entity("SiteFlow.API.Models.PurchaseOrder", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("SiteFlow.API.Models.Store", b =>
+                {
+                    b.Navigation("Locations");
                 });
 
             modelBuilder.Entity("SiteFlow.API.Models.SupplierInvoice", b =>

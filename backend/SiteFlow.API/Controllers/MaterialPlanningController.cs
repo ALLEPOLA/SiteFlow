@@ -33,15 +33,17 @@ public class MaterialPlanningController(AppDbContext db) : ControllerBase
         var project = await db.Projects.AsNoTracking().SingleOrDefaultAsync(p => p.Id == dto.ProjectId, ct);
         if (project is null) return NotFound(new { message = "Project not found or not assigned to you." });
         if (project.Status != "Active") return BadRequest(new { message = "Choose an active project." });
+        if (dto.StorageLocationId.HasValue && await StorageRules.Resolve(db, project.Id, dto.StorageLocationId, ct) is null)
+            return BadRequest(new { message = "Choose an active location in this project." });
         var ids = dto.Lines.Select(l => l.MaterialId).ToArray();
         var materials = await db.Materials.AsNoTracking().Where(m => ids.Contains(m.Id) && m.IsActive).ToDictionaryAsync(m => m.Id, ct);
         if (materials.Count != ids.Length) return BadRequest(new { message = "Choose active materials." });
         var stock = await db.StockMovements.AsNoTracking()
-            .Where(m => m.ProjectId == project.Id && ids.Contains(m.MaterialId))
+            .Where(m => m.ProjectId == project.Id && (!dto.StorageLocationId.HasValue || m.StorageLocationId == dto.StorageLocationId) && ids.Contains(m.MaterialId))
             .GroupBy(m => m.MaterialId).Select(g => new { Id = g.Key, Quantity = g.Sum(m => m.Quantity) })
             .ToDictionaryAsync(m => m.Id, m => m.Quantity, ct);
         var reserved = await db.MaterialReservations.AsNoTracking()
-            .Where(r => r.ProjectId == project.Id && ids.Contains(r.MaterialId))
+            .Where(r => r.ProjectId == project.Id && (!dto.StorageLocationId.HasValue || r.StorageLocationId == dto.StorageLocationId) && ids.Contains(r.MaterialId))
             .GroupBy(r => r.MaterialId).Select(g => new { Id = g.Key, Quantity = g.Sum(r => r.Quantity - r.ConsumedQuantity - r.ReleasedQuantity) })
             .ToDictionaryAsync(r => r.Id, r => r.Quantity, ct);
         var orderLines = await db.PurchaseOrderLines.AsNoTracking()
@@ -66,7 +68,7 @@ public class MaterialPlanningController(AppDbContext db) : ControllerBase
         var lines = dto.Lines.Select(input =>
         {
             var material = materials[input.MaterialId];
-            var incoming = orderLines.Where(l => l.MaterialId == input.MaterialId)
+            var incoming = orderLines.Where(l => !dto.StorageLocationId.HasValue && l.MaterialId == input.MaterialId)
                 .Select(l => new PlanningDelivery(l.ExpectedDeliveryDate,
                     Math.Max(0, l.Quantity - received.GetValueOrDefault(l.Id))));
             var result = MaterialPlanningRules.Calculate(input.Quantity, input.SafetyStock,
@@ -86,7 +88,7 @@ public class MaterialPlanningController(AppDbContext db) : ControllerBase
         var estimatedCost = lines.Sum(l => l.EstimatedCost);
         return Ok(new
         {
-            projectId = project.Id, projectName = project.Name, dto.RequiredDate,
+            dto.StorageLocationId, projectId = project.Id, projectName = project.Name, dto.RequiredDate,
             generatedAtUtc = DateTime.UtcNow, asOfDate = today,
             project.Budget, committedPurchaseValue = committed,
             budgetAfterCommitments = project.Budget - committed,
@@ -96,6 +98,7 @@ public class MaterialPlanningController(AppDbContext db) : ControllerBase
             assumptions = new[] {
                 "Demand is additional upcoming work; no usage history is required.",
                 "Available stock is the recorded ledger balance minus remaining reservations, including posted corrections and returns.",
+                "Location-specific plans exclude incoming orders because purchase orders do not allocate a receiving location in advance.",
                 "Incoming supply includes only unreceived quantities on issued or partially received orders expected from today through the required date.",
                 "Overdue promises, later deliveries, draft orders, and cancelled orders do not cover demand.",
                 "Supplier returns reduce stock but do not automatically reopen completed purchase orders.",
@@ -109,6 +112,7 @@ public class MaterialPlanningController(AppDbContext db) : ControllerBase
 
 public class MaterialPlanningDto
 {
+    [Range(1, int.MaxValue)] public int? StorageLocationId { get; set; }
     [Range(1, int.MaxValue)] public int ProjectId { get; set; }
     public DateOnly RequiredDate { get; set; }
     [Required, MinLength(1), MaxLength(100)] public List<MaterialPlanningLineDto> Lines { get; set; } = new();

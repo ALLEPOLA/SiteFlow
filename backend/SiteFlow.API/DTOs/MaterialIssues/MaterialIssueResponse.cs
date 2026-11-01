@@ -2,6 +2,9 @@ namespace SiteFlow.API.DTOs.MaterialIssues;
 
 public class MaterialIssueResponse
 {
+    public int StorageLocationId { get; set; }
+    public string StorageLocationName { get; set; } = "";
+
     public int Id { get; set; }
 
     public string IssueNumber { get; set; } = "";

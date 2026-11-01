@@ -21,6 +21,10 @@ public class AuditEntry
 
 public class InventoryOperation
 {
+    public int StorageLocationId { get; set; }
+    public StorageLocation StorageLocation { get; set; } = null!;
+    public int? DestinationStorageLocationId { get; set; }
+    public StorageLocation? DestinationStorageLocation { get; set; }
     public int Id { get; set; }
     public string ClientRequestId { get; set; } = "";
     public string RequestHash { get; set; } = "";

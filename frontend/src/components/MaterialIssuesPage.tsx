@@ -1,3 +1,4 @@
+import StorageLocationSelect from './ui/StorageLocationSelect'
 import Icon from './ui/Icon'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -29,6 +30,8 @@ type IssueLine = {
 }
 
 type MaterialIssue = {
+  storageLocationId: number
+  storageLocationName: string
   id: number
   issueNumber: string
   clientRequestId: string
@@ -96,6 +99,8 @@ export default function MaterialIssuesPage() {
   const [success, setSuccess] = useState('')
 
   const [projectId, setProjectId] = useState('')
+  const [storageLocationId, setStorageLocationId] = useState('')
+  const [locationBalances, setLocationBalances] = useState<StockBalance[]>([])
   const [issueDate, setIssueDate] = useState(localToday)
   const [purpose, setPurpose] = useState('')
   const [receivedBy, setReceivedBy] = useState('')
@@ -165,19 +170,22 @@ export default function MaterialIssuesPage() {
   }, [])
 
   useEffect(() => {
-    if (!canIssue || !projectId) return
+    if (!canIssue || !projectId || !storageLocationId) return
     const controller = new AbortController()
-    async function loadHolds() {
+    async function loadLocation() {
       try {
-        const response = await apiFetch('/api/material-reservations?projectId=' + projectId, { signal: controller.signal, cache: 'no-store' })
-        const data = await readApiResponse<Hold[]>(response)
-        if (!controller.signal.aborted) setHolds(data)
+        const query = '?projectId=' + projectId + '&storageLocationId=' + storageLocationId
+        const [stock, holdData] = await Promise.all([
+          apiFetch('/api/inventory/balances' + query, { signal: controller.signal, cache: 'no-store' }).then(readApiResponse<StockBalance[]>),
+          apiFetch('/api/material-reservations' + query, { signal: controller.signal, cache: 'no-store' }).then(readApiResponse<Hold[]>),
+        ])
+        if (!controller.signal.aborted) { setLocationBalances(stock); setHolds(holdData); setDraftLines(stock.filter(b => b.quantityOnHand > 0).map(b => ({ materialId: b.materialId, quantity: '', reservationId: '' }))) }
       } catch (e) { if (!controller.signal.aborted) setError(getError(e)) }
       finally { if (!controller.signal.aborted) setHoldsLoading(false) }
     }
-    void loadHolds()
+    void loadLocation()
     return () => controller.abort()
-  }, [projectId, canIssue])
+  }, [projectId, storageLocationId, canIssue])
 
   function issueLimit(stock: StockBalance, reservationId: string) {
     return reservationId ? holds.find(h => h.id === Number(reservationId) && h.materialId === stock.materialId)?.remainingQuantity ?? 0 : stock.availableQuantity
@@ -200,24 +208,15 @@ export default function MaterialIssuesPage() {
     ).values(),
   ).sort((a, b) => a.code.localeCompare(b.code))
 
-  const projectStock = availableStock.filter(
-    balance => balance.projectId === Number(projectId),
+  const projectStock = locationBalances.filter(
+    balance => balance.projectId === Number(projectId) && balance.quantityOnHand > 0,
   )
 
   function changeProject(value: string) {
-    setProjectId(value)
-    setHolds([])
-    setHoldsLoading(Boolean(value))
-
-    setDraftLines(
-      availableStock
-        .filter(balance => balance.projectId === Number(value))
-        .map(balance => ({
-          materialId: balance.materialId,
-          quantity: '',
-          reservationId: '',
-        })),
-    )
+    setProjectId(value); setStorageLocationId(''); setLocationBalances([]); setDraftLines([]); setHolds([]); setHoldsLoading(false)
+  }
+  function changeLocation(value: string) {
+    setStorageLocationId(value); setLocationBalances([]); setDraftLines([]); setHolds([]); setHoldsLoading(Boolean(value))
   }
 
   function changeQuantity(materialId: number, value: string) {
@@ -292,6 +291,7 @@ export default function MaterialIssuesPage() {
     const payload = {
       clientRequestId: submissionId.current,
       projectId: Number(projectId),
+      storageLocationId: Number(storageLocationId),
       issueDate,
       purpose: purpose.trim(),
       receivedBy: receivedBy.trim(),
@@ -325,6 +325,8 @@ export default function MaterialIssuesPage() {
       submissionId.current = crypto.randomUUID()
 
       setProjectId('')
+      setStorageLocationId('')
+      setLocationBalances([])
       setIssueDate(localToday())
       setPurpose('')
       setReceivedBy('')
@@ -411,6 +413,7 @@ export default function MaterialIssuesPage() {
                     </select>
                   </label>
 
+                  <StorageLocationSelect projectId={projectId} value={storageLocationId} onChange={changeLocation} label="Issue from store / location" />
                   <label>
                     Issue date
                     <input
@@ -460,6 +463,7 @@ export default function MaterialIssuesPage() {
                   </label>
                 </div>
 
+                {projectId && storageLocationId && !holdsLoading && projectStock.length === 0 && <p>No stock is available in this location. Receive stock or transfer it here first.</p>}
                 {projectId && projectStock.length > 0 && (
                   <>
                     <p>
@@ -562,7 +566,7 @@ export default function MaterialIssuesPage() {
               <tbody>
                 {issues.map(issue => (
                   <tr key={issue.id}>
-                    <td>{issue.issueNumber}</td>
+                    <td>{issue.issueNumber}<br /><small>{issue.storageLocationName}</small></td>
                     <td>{issue.projectName}</td>
                     <td>{issue.issueDate}</td>
                     <td>{issue.receivedBy}</td>
@@ -603,7 +607,7 @@ export default function MaterialIssuesPage() {
           <p>
             <strong>Project:</strong> {selectedIssue.projectCode}
             {' — '}
-            {selectedIssue.projectName}
+            {selectedIssue.projectName} / {selectedIssue.storageLocationName}
           </p>
 
           <p>

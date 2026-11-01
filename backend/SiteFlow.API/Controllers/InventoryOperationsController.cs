@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,7 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List() => Ok(await db.InventoryOperations.AsNoTracking().OrderByDescending(o => o.Id).Take(200)
-        .Select(o => new { o.Id, o.Kind, o.Status, o.ProjectId, projectName = o.Project.Name, o.DestinationProjectId,
+        .Select(o => new { o.Id, o.Kind, o.Status, o.StorageLocationId, storageLocationName = o.StorageLocation.Store.Code + " / " + o.StorageLocation.Code, o.DestinationStorageLocationId, destinationStorageLocationName = o.DestinationStorageLocation == null ? null : o.DestinationStorageLocation.Store.Code + " / " + o.DestinationStorageLocation.Code, destinationProjectName = o.DestinationProject == null ? null : o.DestinationProject.Name, o.ProjectId, projectName = o.Project.Name, o.DestinationProjectId,
             o.MaterialId, materialName = o.Material.Name, o.Quantity, o.UnitCost, o.Date, o.Reason, o.CreatedAtUtc }).ToListAsync());
 
     [HttpPost]
@@ -26,8 +27,8 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
             !new[] { "Adjustment", "Count", "Transfer", "SupplierReturn" }.Contains(dto.Kind) ||
             (dto.Kind == "Count" ? dto.Quantity < 0 : dto.Quantity == 0) ||
             (dto.Kind is "Transfer" or "SupplierReturn" && dto.Quantity <= 0) ||
-            (dto.Kind == "Transfer" && (dto.DestinationProjectId is null || dto.DestinationProjectId == dto.ProjectId)) ||
-            (dto.Kind != "Transfer" && dto.DestinationProjectId is not null) ||
+            (dto.Kind == "Transfer" && dto.DestinationProjectId is null) ||
+            (dto.Kind != "Transfer" && (dto.DestinationProjectId is not null || dto.DestinationStorageLocationId is not null)) ||
             (dto.Kind == "SupplierReturn" ? dto.GoodsReceiptLineId is null : dto.GoodsReceiptLineId is not null))
             return BadRequest(new { message = "Check the operation, date, quantities, unit cost, destination, receipt line, and reason." });
 
@@ -60,16 +61,27 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
                 return Conflict(new { message = "Submission ID was already used for different data." });
             return Ok(new { existing.Id, message = "Operation already posted." });
         }
+        var sourceLocation = await StorageRules.Resolve(db, dto.ProjectId, dto.StorageLocationId);
+        if (sourceLocation is null) return BadRequest(new { message = "Choose an active source location in this project." });
+        StorageLocation? destinationLocation = null;
+        if (dto.Kind == "Transfer")
+        {
+            destinationLocation = await StorageRules.Resolve(db, dto.DestinationProjectId!.Value, dto.DestinationStorageLocationId);
+            if (destinationLocation is null || StorageRules.SameEndpoint(dto.ProjectId, sourceLocation.Id, dto.DestinationProjectId.Value, destinationLocation.Id))
+                return BadRequest(new { message = "Choose a different active destination location in an assigned project." });
+        }
+        if (receiptLine is not null && receiptLine.GoodsReceipt.StorageLocationId != sourceLocation.Id)
+            return BadRequest(new { message = "Supplier returns must use the original receipt location. Transfer replacement stock there first if appropriate." });
         if (!await db.Materials.AnyAsync(m => m.Id == dto.MaterialId && m.IsActive)) return BadRequest(new { message = "Select an active material." });
         // Do not count or move stock whose historical receipts have not been imported.
-        if (await db.GoodsReceiptLines.AnyAsync(l => l.GoodsReceipt.Status == "Posted" &&
+        if (await db.GoodsReceiptLines.AnyAsync(l => l.GoodsReceipt.Status == "Posted" && l.GoodsReceipt.StorageLocationId == sourceLocation.Id &&
             l.GoodsReceipt.PurchaseOrder.MaterialRequest.ProjectId == dto.ProjectId && l.PurchaseOrderLine.MaterialRequestLine.MaterialId == dto.MaterialId &&
             !db.StockMovements.Any(m => m.GoodsReceiptLineId == l.Id)))
             return Conflict(new { message = "Import existing receipts before changing this stock." });
-        var stock = await OperationRules.Stock(db, dto.ProjectId, dto.MaterialId);
+        var stock = await OperationRules.Stock(db, dto.ProjectId, dto.MaterialId, sourceLocation.Id);
         if (dto.Date < stock.Latest) return BadRequest(new { message = "Date cannot precede the latest stock movement." });
         var change = dto.Kind == "Count" ? dto.Quantity - stock.Quantity : dto.Kind is "Transfer" or "SupplierReturn" ? -dto.Quantity : dto.Quantity;
-        if (!ReservationRules.CanReduceTo(stock.Quantity + change, await ReservationRules.Held(db, dto.ProjectId, dto.MaterialId))) return Conflict(new { message = "Insufficient unreserved stock. Release reservations before reducing stock below the reserved quantity." });
+        if (!ReservationRules.CanReduceTo(stock.Quantity + change, await ReservationRules.Held(db, dto.ProjectId, dto.MaterialId, storageLocationId: sourceLocation.Id))) return Conflict(new { message = "Insufficient unreserved stock. Release reservations before reducing stock below the reserved quantity." });
         var cost = change < 0 || (dto.Kind == "Count" && stock.Quantity > 0) ? stock.Cost : dto.UnitCost;
         if (receiptLine is not null)
         {
@@ -81,11 +93,12 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
             var returned = await db.InventoryOperations.Where(o => o.GoodsReceiptLineId == receiptLine.Id && o.Kind == "SupplierReturn" && o.Status == "Posted").SumAsync(o => (decimal?)o.Quantity) ?? 0;
             if (dto.Quantity > receiptLine.Quantity - returned) return Conflict(new { message = "Return quantity exceeds the unreturned receipt quantity." });
             cost = receiptLine.UnitCost;
-            var availableValue = await db.StockMovements.Where(m => m.ProjectId == dto.ProjectId && m.MaterialId == dto.MaterialId).SumAsync(m => (decimal?)(m.Quantity * m.UnitCost)) ?? 0;
+            var availableValue = await db.StockMovements.Where(m => m.ProjectId == dto.ProjectId && m.MaterialId == dto.MaterialId && m.StorageLocationId == sourceLocation.Id).SumAsync(m => (decimal?)(m.Quantity * m.UnitCost)) ?? 0;
             if (availableValue < dto.Quantity * cost) return Conflict(new { message = "The return exceeds the remaining stock value. Review dependent material usage first." });
         }
         var operation = new InventoryOperation
         {
+            StorageLocationId = sourceLocation.Id, DestinationStorageLocationId = destinationLocation?.Id,
             RequestHash = requestHash,
             ClientRequestId = key.ToString("D"), ProjectId = dto.ProjectId, DestinationProjectId = dto.DestinationProjectId,
             MaterialId = dto.MaterialId, Kind = dto.Kind, Quantity = dto.Quantity, UnitCost = cost,
@@ -94,15 +107,15 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
         db.InventoryOperations.Add(operation);
         if (change != 0)
         {
-            var movement = OperationRules.Movement(db, dto.ProjectId, dto.MaterialId, dto.Kind == "Transfer" ? "TransferOut" : dto.Kind, change, cost, dto.Date);
+            var movement = OperationRules.Movement(db, dto.ProjectId, dto.MaterialId, dto.Kind == "Transfer" ? "TransferOut" : dto.Kind, change, cost, dto.Date, sourceLocation.Id);
             movement.InventoryOperation = operation;
             db.StockMovements.Add(movement);
         }
         if (dto.Kind == "Transfer")
         {
-            var destination = await OperationRules.Stock(db, dto.DestinationProjectId!.Value, dto.MaterialId);
+            var destination = await OperationRules.Stock(db, dto.DestinationProjectId!.Value, dto.MaterialId, destinationLocation!.Id);
             if (dto.Date < destination.Latest) return BadRequest(new { message = "Date precedes the destination's latest stock movement." });
-            var incoming = OperationRules.Movement(db, dto.DestinationProjectId.Value, dto.MaterialId, "TransferIn", dto.Quantity, cost, dto.Date);
+            var incoming = OperationRules.Movement(db, dto.DestinationProjectId.Value, dto.MaterialId, "TransferIn", dto.Quantity, cost, dto.Date, destinationLocation!.Id);
             incoming.InventoryOperation = operation;
             db.StockMovements.Add(incoming);
         }
@@ -130,13 +143,13 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
         var movements = await db.StockMovements.Where(m => m.InventoryOperationId == id).ToListAsync();
         foreach (var movement in movements)
         {
-            var stock = await OperationRules.Stock(db, movement.ProjectId, movement.MaterialId);
-            if (!ReservationRules.CanReduceTo(stock.Quantity - movement.Quantity, await ReservationRules.Held(db, movement.ProjectId, movement.MaterialId))) return Conflict(new { message = "Reversal would consume reserved stock or create negative stock. Release holds or reverse dependent activity first." });
-            if (movement.Quantity > 0 && await db.StockMovements.AnyAsync(m => m.ProjectId == movement.ProjectId && m.MaterialId == movement.MaterialId && m.Id > movement.Id &&
+            var stock = await OperationRules.Stock(db, movement.ProjectId, movement.MaterialId, movement.StorageLocationId);
+            if (!ReservationRules.CanReduceTo(stock.Quantity - movement.Quantity, await ReservationRules.Held(db, movement.ProjectId, movement.MaterialId, storageLocationId: movement.StorageLocationId))) return Conflict(new { message = "Reversal would consume reserved stock or create negative stock. Release holds or reverse dependent activity first." });
+            if (movement.Quantity > 0 && await db.StockMovements.AnyAsync(m => m.ProjectId == movement.ProjectId && m.MaterialId == movement.MaterialId && m.StorageLocationId == movement.StorageLocationId && m.Id > movement.Id &&
                 m.ReversesMovementId == null && !db.StockMovements.Any(r => r.ReversesMovementId == m.Id)))
                 return Conflict(new { message = "Reverse later stock activity first to preserve valuation." });
             var date = DateOnly.FromDateTime(DateTime.UtcNow);
-            var reversal = OperationRules.Movement(db, movement.ProjectId, movement.MaterialId, "Reversal", -movement.Quantity, movement.UnitCost, date > stock.Latest ? date : stock.Latest);
+            var reversal = OperationRules.Movement(db, movement.ProjectId, movement.MaterialId, "Reversal", -movement.Quantity, movement.UnitCost, date > stock.Latest ? date : stock.Latest, movement.StorageLocationId);
             reversal.ReversesMovementId = movement.Id;
             db.StockMovements.Add(reversal);
         }
@@ -149,6 +162,8 @@ public class InventoryOperationsController(AppDbContext db) : ControllerBase
 
 public class InventoryOperationDto : ReasonDto
 {
+    [Range(1, int.MaxValue), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? StorageLocationId { get; set; }
+    [Range(1, int.MaxValue), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? DestinationStorageLocationId { get; set; }
     [Required, StringLength(36)] public string ClientRequestId { get; set; } = "";
     [Range(1, int.MaxValue)] public int ProjectId { get; set; }
     public int? DestinationProjectId { get; set; }

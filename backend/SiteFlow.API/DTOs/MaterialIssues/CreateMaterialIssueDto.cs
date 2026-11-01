@@ -4,6 +4,8 @@ namespace SiteFlow.API.DTOs.MaterialIssues;
 
 public class CreateMaterialIssueDto
 {
+    [Range(1, int.MaxValue)] public int? StorageLocationId { get; set; }
+
     [Required]
     [StringLength(36)]
     public string ClientRequestId { get; set; } = "";

@@ -3,6 +3,9 @@ namespace SiteFlow.API.Models;
 public class StockMovement
 {
     public int Id { get; set; }
+    public int StorageLocationId { get; set; }
+    public StorageLocation StorageLocation { get; set; } = null!;
+
     public int? InventoryOperationId { get; set; }
     public InventoryOperation? InventoryOperation { get; set; }
     public int? ReversesMovementId { get; set; }

@@ -108,13 +108,13 @@ public class CorrectionsController(AppDbContext db) : ControllerBase
         if (movements.Count != ids.Count) return Conflict(new { message = "Import missing receipt stock before reversal." });
         foreach (var m in movements)
         {
-            var stock = await OperationRules.Stock(db, m.ProjectId, m.MaterialId);
-            if (!ReservationRules.CanReduceTo(stock.Quantity - m.Quantity, await ReservationRules.Held(db, m.ProjectId, m.MaterialId))) return Conflict(new { message = "Receipt reversal would remove reserved stock or create negative stock. Release holds or reverse dependent issues first." });
+            var stock = await OperationRules.Stock(db, m.ProjectId, m.MaterialId, m.StorageLocationId);
+            if (!ReservationRules.CanReduceTo(stock.Quantity - m.Quantity, await ReservationRules.Held(db, m.ProjectId, m.MaterialId, storageLocationId: m.StorageLocationId))) return Conflict(new { message = "Receipt reversal would remove reserved stock or create negative stock. Release holds or reverse dependent issues first." });
             // Preserve valuation history: remove a receipt only before later movements use its cost.
-            if (await db.StockMovements.AnyAsync(x => x.ProjectId == m.ProjectId && x.MaterialId == m.MaterialId && x.Id > m.Id &&
+            if (await db.StockMovements.AnyAsync(x => x.ProjectId == m.ProjectId && x.MaterialId == m.MaterialId && x.StorageLocationId == m.StorageLocationId && x.Id > m.Id &&
                 x.ReversesMovementId == null && !db.StockMovements.Any(r => r.ReversesMovementId == x.Id)))
                 return Conflict(new { message = "Reverse later stock activity for this material first." });
-            var reversal = OperationRules.Movement(db, m.ProjectId, m.MaterialId, "Reversal", -m.Quantity, m.UnitCost, DateOnly.FromDateTime(DateTime.UtcNow));
+            var reversal = OperationRules.Movement(db, m.ProjectId, m.MaterialId, "Reversal", -m.Quantity, m.UnitCost, DateOnly.FromDateTime(DateTime.UtcNow), m.StorageLocationId);
             reversal.MovementDate = stock.Latest > reversal.MovementDate ? stock.Latest : reversal.MovementDate;
             reversal.ReversesMovementId = m.Id;
             db.StockMovements.Add(reversal);
@@ -142,9 +142,9 @@ public class CorrectionsController(AppDbContext db) : ControllerBase
         if (movements.Count != ids.Count) return Conflict(new { message = "Issue stock history is incomplete." });
         foreach (var m in movements)
         {
-            var stock = await OperationRules.Stock(db, m.ProjectId, m.MaterialId);
+            var stock = await OperationRules.Stock(db, m.ProjectId, m.MaterialId, m.StorageLocationId);
             var date = DateOnly.FromDateTime(DateTime.UtcNow);
-            var reversal = OperationRules.Movement(db, m.ProjectId, m.MaterialId, "Reversal", -m.Quantity, m.UnitCost, date > stock.Latest ? date : stock.Latest);
+            var reversal = OperationRules.Movement(db, m.ProjectId, m.MaterialId, "Reversal", -m.Quantity, m.UnitCost, date > stock.Latest ? date : stock.Latest, m.StorageLocationId);
             reversal.ReversesMovementId = m.Id;
             db.StockMovements.Add(reversal);
         }

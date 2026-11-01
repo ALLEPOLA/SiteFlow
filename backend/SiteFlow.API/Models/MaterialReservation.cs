@@ -3,6 +3,9 @@ namespace SiteFlow.API.Models;
 public class MaterialReservation
 {
     public int Id { get; set; }
+    public int StorageLocationId { get; set; }
+    public StorageLocation StorageLocation { get; set; } = null!;
+
     public string ClientRequestId { get; set; } = "";
     public int ProjectId { get; set; }
     public Project Project { get; set; } = null!;

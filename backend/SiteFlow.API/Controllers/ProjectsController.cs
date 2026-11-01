@@ -1,3 +1,4 @@
+using SiteFlow.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -109,6 +110,7 @@ public class ProjectsController : ControllerBase
         };
 
         _context.Projects.Add(project);
+        _context.Stores.Add(StorageRules.DefaultStore(project));
 
         try
         {

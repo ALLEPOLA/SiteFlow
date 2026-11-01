@@ -1,3 +1,4 @@
+import StorageLocationSelect from '../ui/StorageLocationSelect'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiFetch, readApiResponse } from '../../api/apiFetch'
@@ -28,6 +29,7 @@ export default function MaterialPlanningPage({ user }: { user: AuthUser }) {
   const [projects, setProjects] = useState<Project[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
   const [projectId, setProjectId] = useState('')
+  const [storageLocationId, setStorageLocationId] = useState('')
   const [requiredDate, setRequiredDate] = useState(today)
   const [reason, setReason] = useState('')
   const [lines, setLines] = useState<InputLine[]>([newLine()])
@@ -63,7 +65,7 @@ export default function MaterialPlanningPage({ user }: { user: AuthUser }) {
     setLines(current => current.map(l => l.key === key ? { ...l, [name]: value } : l))
   }
   function payload() {
-    return { projectId: Number(projectId), requiredDate, lines: lines.map(l => ({
+    return { projectId: Number(projectId), storageLocationId: storageLocationId ? Number(storageLocationId) : null, requiredDate, lines: lines.map(l => ({
       materialId: Number(l.materialId), quantity: Number(l.quantity), safetyStock: Number(l.safetyStock),
       leadTimeDays: Number(l.leadTimeDays), estimatedUnitPrice: Number(l.estimatedUnitPrice),
     })) }
@@ -103,7 +105,7 @@ export default function MaterialPlanningPage({ user }: { user: AuthUser }) {
       const created = await readApiResponse<{ id: number }>(await apiFetch('/api/material-requests', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: fresh.projectId, requiredDate: fresh.requiredDate,
-          reason: 'Material planning: ' + reason.trim(),
+          reason: (storageLocationId ? 'Material planning (location #' + storageLocationId + '): ' : 'Material planning: ') + reason.trim(),
           lines: shortage.map(l => ({ materialId: l.materialId, quantity: l.shortage, estimatedUnitPrice: l.estimatedUnitPrice })),
         }),
       }))
@@ -131,10 +133,11 @@ export default function MaterialPlanningPage({ user }: { user: AuthUser }) {
           <form onSubmit={preview}>
             <fieldset className="form-fields" disabled={busy}>
               <div className="form-grid">
-                <label>Project<select value={projectId} onChange={e => { invalidate(); setProjectId(e.target.value) }} required><option value="">Select an active project</option>{projects.map(p => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select></label>
+                <label>Project<select value={projectId} onChange={e => { invalidate(); setProjectId(e.target.value); setStorageLocationId('') }} required><option value="">Select an active project</option>{projects.map(p => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select></label>
+                <StorageLocationSelect projectId={projectId} value={storageLocationId} onChange={value => { invalidate(); setStorageLocationId(value) }} label="Planning location (optional)" optional />
                 <label>Required on<input type="date" min={today()} value={requiredDate} onChange={e => { invalidate(); setRequiredDate(e.target.value) }} required /></label>
               </div>
-              <p className="section-description">Safety stock is the extra quantity you want left after the work. Lead time is your expected supplier turnaround, in calendar days.</p>
+              <p className="section-description">A specific-location plan excludes incoming orders and other locations. Consider a stock transfer before purchasing more. Safety stock is the extra quantity you want left after the work. Lead time is your expected supplier turnaround, in calendar days.</p>
               {lines.map((line, index) => (
                 <div className="request-line" key={line.key}>
                   <div className="section-toolbar"><h3>Material {index + 1}</h3>{lines.length > 1 && <button type="button" className="secondary-button" onClick={() => { invalidate(); setLines(current => current.filter(l => l.key !== line.key)) }}>Remove</button>}</div>

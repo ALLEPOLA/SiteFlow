@@ -3,6 +3,9 @@ namespace SiteFlow.API.Models;
 public class GoodsReceipt
 {
     public int Id { get; set; }
+    public int StorageLocationId { get; set; }
+    public StorageLocation StorageLocation { get; set; } = null!;
+
 
     // Identifies a submission so retrying it does not
     // accidentally record the same delivery twice.

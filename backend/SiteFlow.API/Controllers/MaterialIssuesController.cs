@@ -28,6 +28,7 @@ public class MaterialIssuesController : ControllerBase
     {
         return _context.MaterialIssues
             .AsNoTracking()
+            .Include(i => i.StorageLocation).ThenInclude(l => l.Store)
             .Include(i => i.Project)
             .Include(i => i.CreatedByUser)
             .Include(i => i.Lines)
@@ -217,6 +218,9 @@ public class MaterialIssuesController : ControllerBase
             });
         }
 
+        var location = await StorageRules.Resolve(_context, dto.ProjectId, dto.StorageLocationId, cancellationToken);
+        if (location is null) return BadRequest(new { message = "Choose an active storage location in this project." });
+
         var materials = await _context.Materials
             .AsNoTracking()
             .Where(m => materialIds.Contains(m.Id))
@@ -238,7 +242,7 @@ public class MaterialIssuesController : ControllerBase
         var hasMissingReceiptStock =
             await _context.GoodsReceiptLines.AnyAsync(
                 line =>
-                    line.GoodsReceipt.Status == "Posted" &&
+                    line.GoodsReceipt.Status == "Posted" && line.GoodsReceipt.StorageLocationId == location.Id &&
                     line.GoodsReceipt.PurchaseOrder
                         .MaterialRequest.ProjectId == dto.ProjectId &&
                     materialIds.Contains(
@@ -261,7 +265,7 @@ public class MaterialIssuesController : ControllerBase
         var stock = await _context.StockMovements
             .AsNoTracking()
             .Where(m =>
-                m.ProjectId == dto.ProjectId &&
+                m.ProjectId == dto.ProjectId && m.StorageLocationId == location.Id &&
                 materialIds.Contains(m.MaterialId))
             .GroupBy(m => m.MaterialId)
             .Select(group => new
@@ -285,12 +289,12 @@ public class MaterialIssuesController : ControllerBase
         var reservations = await _context.MaterialReservations.Where(r => reservationIds.Contains(r.Id)).ToDictionaryAsync(r => r.Id, cancellationToken);
         foreach (var input in dto.Lines)
         {
-            var held = await ReservationRules.Held(_context, dto.ProjectId, input.MaterialId, cancellationToken);
+            var held = await ReservationRules.Held(_context, dto.ProjectId, input.MaterialId, cancellationToken, location.Id);
             var onHand = stock.TryGetValue(input.MaterialId, out var balance) ? balance.QuantityOnHand : 0;
             if (input.ReservationId is int reservationId)
             {
                 if (!reservations.TryGetValue(reservationId, out var hold) || hold.ProjectId != dto.ProjectId ||
-                    hold.MaterialId != input.MaterialId || input.Quantity > ReservationRules.Remaining(hold.Quantity, hold.ConsumedQuantity, hold.ReleasedQuantity))
+                    hold.MaterialId != input.MaterialId || hold.StorageLocationId != location.Id || input.Quantity > ReservationRules.Remaining(hold.Quantity, hold.ConsumedQuantity, hold.ReleasedQuantity))
                     return Conflict(new { message = "Reservation does not match this project/material or its remaining quantity is insufficient." });
                 if (dto.IssueDate < DateOnly.FromDateTime(hold.CreatedAtUtc))
                     return BadRequest(new { message = "A reserved issue cannot predate the reservation." });
@@ -350,6 +354,7 @@ public class MaterialIssuesController : ControllerBase
         {
             ClientRequestId = requestKey,
             ProjectId = dto.ProjectId,
+            StorageLocationId = location.Id,
             IssueDate = dto.IssueDate,
             Purpose = dto.Purpose.Trim(),
             ReceivedBy = dto.ReceivedBy.Trim(),
@@ -384,6 +389,7 @@ public class MaterialIssuesController : ControllerBase
             _context.StockMovements.Add(new StockMovement
             {
                 ProjectId = issue.ProjectId,
+                StorageLocationId = issue.StorageLocationId,
                 MaterialId = line.MaterialId,
                 MovementType = "Issue",
 
@@ -448,6 +454,7 @@ public class MaterialIssuesController : ControllerBase
         string userId)
     {
         var sameHeader =
+            StorageRules.Matches(dto.StorageLocationId, existing.StorageLocation) &&
             existing.CreatedByUserId == userId &&
             existing.ProjectId == dto.ProjectId &&
             existing.IssueDate == dto.IssueDate &&
@@ -503,6 +510,8 @@ public class MaterialIssuesController : ControllerBase
             IssueNumber = $"MI-{issue.Id:D6}",
             ClientRequestId = issue.ClientRequestId,
             ProjectId = issue.ProjectId,
+            StorageLocationId = issue.StorageLocationId,
+            StorageLocationName = issue.StorageLocation.Store.Code + " / " + issue.StorageLocation.Code,
             ProjectCode = issue.Project.Code,
             ProjectName = issue.Project.Name,
             IssueDate = issue.IssueDate,

@@ -1,5 +1,5 @@
 // Navigation describes assigned duties. API write checks and project filters remain authoritative.
-export type WorkspacePage = "dashboard" | "projects" | "costs" | "materials" | "suppliers" | "planning" | "requests" | "orders" | "receipts" | "inventory" | "issues" | "corrections" | "stock-operations" | "accounts" | "documents" | "notifications" | "reports" | "audit" | "users" | "profile" | "reservations"
+export type WorkspacePage = "dashboard" | "projects" | "costs" | "materials" | "suppliers" | "planning" | "requests" | "orders" | "receipts" | "inventory" | "issues" | "corrections" | "stock-operations" | "accounts" | "documents" | "notifications" | "reports" | "audit" | "users" | "profile" | "reservations" | "stores"
 export const rolePages: Readonly<Record<string, readonly WorkspacePage[]>> = {
   "Administrator": [
     "dashboard",
@@ -13,6 +13,7 @@ export const rolePages: Readonly<Record<string, readonly WorkspacePage[]>> = {
     "receipts",
     "inventory",
     "reservations",
+    "stores",
     "issues",
     "corrections",
     "stock-operations",
@@ -32,6 +33,7 @@ export const rolePages: Readonly<Record<string, readonly WorkspacePage[]>> = {
     "requests",
     "inventory",
     "reservations",
+    "stores",
     "corrections",
     "documents",
     "notifications",
@@ -50,6 +52,7 @@ export const rolePages: Readonly<Record<string, readonly WorkspacePage[]>> = {
     "receipts",
     "inventory",
     "reservations",
+    "stores",
     "issues",
     "documents",
     "notifications",
@@ -68,6 +71,7 @@ export const rolePages: Readonly<Record<string, readonly WorkspacePage[]>> = {
     "receipts",
     "inventory",
     "reservations",
+    "stores",
     "corrections",
     "accounts",
     "documents",
@@ -83,6 +87,7 @@ export const rolePages: Readonly<Record<string, readonly WorkspacePage[]>> = {
     "receipts",
     "inventory",
     "reservations",
+    "stores",
     "issues",
     "corrections",
     "stock-operations",
